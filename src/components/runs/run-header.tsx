@@ -14,6 +14,10 @@ import {
   getStatusLabel,
 } from "@/lib/reconciliation";
 import { cn } from "@/lib/utils";
+import {
+  exportEvidenceBundle,
+  type InvestigationReportResponse,
+} from "@/components/investigation/evidence-bundle";
 
 interface RunHeaderProps {
   run: {
@@ -36,7 +40,23 @@ export function RunHeader({ run }: RunHeaderProps) {
       setIsGenerating(true);
       setFeedback(null);
 
-      const response = await fetch("/api/actions", {
+      const investigateResponse = await fetch("/api/investigate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          runId: run.id,
+        }),
+      });
+
+      if (!investigateResponse.ok) {
+        throw new Error("Unable to generate investigation report for evidence bundle.");
+      }
+
+      const investigation = (await investigateResponse.json()) as InvestigationReportResponse;
+
+      const actionResponse = await fetch("/api/actions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -52,11 +72,16 @@ export function RunHeader({ run }: RunHeaderProps) {
         }),
       });
 
-      if (!response.ok) {
+      if (!actionResponse.ok) {
         throw new Error("Unable to generate evidence bundle.");
       }
 
-      setFeedback("Evidence bundle request logged.");
+      await exportEvidenceBundle({
+        investigation,
+        source: "runs-detail-header",
+      });
+
+      setFeedback("Evidence bundle downloaded.");
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : "Request failed.");
     } finally {

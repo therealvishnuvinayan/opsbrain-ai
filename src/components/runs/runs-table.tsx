@@ -1,7 +1,9 @@
 import Link from "next/link";
 import type { ReconciliationRun } from "@prisma/client";
+import { Microscope } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -19,6 +21,7 @@ import {
   getSeverityLabel,
   getStatusLabel,
 } from "@/lib/reconciliation";
+import { cn } from "@/lib/utils";
 
 interface RunsTableProps {
   runs: ReconciliationRun[];
@@ -45,12 +48,13 @@ export function RunsTable({ runs }: RunsTableProps) {
               <TableHead className="text-right">Exposure</TableHead>
               <TableHead>Severity</TableHead>
               <TableHead>Uploaded At</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {runs.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={11} className="py-8 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={12} className="py-8 text-center text-sm text-muted-foreground">
                   No runs match the selected filters.
                 </TableCell>
               </TableRow>
@@ -84,6 +88,15 @@ export function RunsTable({ runs }: RunsTableProps) {
                     </Badge>
                   </TableCell>
                   <TableCell>{run.uploadedAt.toLocaleString("en-US")}</TableCell>
+                  <TableCell className="text-right">
+                    <Link
+                      href={`/investigation?runId=${run.id}`}
+                      className={cn(buttonVariants({ variant: "outline", size: "sm" }), "inline-flex")}
+                    >
+                      <Microscope className="h-3.5 w-3.5" />
+                      Investigate
+                    </Link>
+                  </TableCell>
                 </TableRow>
               ))
             )}
