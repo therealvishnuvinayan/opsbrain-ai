@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Activity,
@@ -21,50 +22,16 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { formatCompactNumber, formatCurrencyUsd } from "@/lib/reconciliation";
 import { cn } from "@/lib/utils";
 
-const riskMetrics = [
-  {
-    title: "Stuck Runs",
-    value: "42",
-    trend: "+12%",
-    trendDirection: "up" as const,
-    trendTone: "danger" as const,
-    caption: "vs last 24h",
-    severity: "danger" as const,
-    icon: AlertTriangle,
-  },
-  {
-    title: "Mismatch Rate",
-    value: "3.8%",
-    trend: "-0.4%",
-    trendDirection: "down" as const,
-    trendTone: "success" as const,
-    caption: "vs last 24h",
-    severity: "warning" as const,
-    icon: Activity,
-  },
-  {
-    title: "Supplier Health",
-    value: "92 / 100",
-    trend: "+1.2",
-    trendDirection: "up" as const,
-    trendTone: "success" as const,
-    caption: "vs last 24h",
-    severity: "success" as const,
-    icon: ShieldCheck,
-  },
-  {
-    title: "Estimated Exposure",
-    value: "$126,400",
-    trend: "+8.1%",
-    trendDirection: "up" as const,
-    trendTone: "warning" as const,
-    caption: "vs last 24h",
-    severity: "warning" as const,
-    icon: Wallet,
-  },
-];
+interface DashboardMetrics {
+  stuckRuns: number;
+  mismatchRateAvg24h: number;
+  supplierHealthScore: number;
+  estimatedExposure24h: number;
+}
 
 const mismatchTrendData = [
   { day: "Mon", rate: 2.7 },
@@ -75,26 +42,6 @@ const mismatchTrendData = [
   { day: "Sat", rate: 3.9 },
   { day: "Sun", rate: 3.8 },
 ];
-
-const sparklineValues = [14, 16, 15, 18, 17, 21, 19, 22, 20];
-
-function Sparkline() {
-  const points = sparklineValues
-    .map((value, index) => `${index * 15},${28 - value}`)
-    .join(" ");
-
-  return (
-    <svg viewBox="0 0 120 30" className="h-7 w-24" aria-hidden>
-      <polyline
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        points={points}
-        className="text-warning"
-      />
-    </svg>
-  );
-}
 
 const metricStyles = {
   success: "text-success",
@@ -108,29 +55,149 @@ const trendStyles = {
   danger: "text-danger",
 };
 
+function MetricsSkeleton() {
+  return (
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      {Array.from({ length: 4 }).map((_, index) => (
+        <Card key={index} className="border-white/55 dark:border-slate-800/85">
+          <CardHeader className="pb-2">
+            <Skeleton className="h-4 w-28" />
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Skeleton className="h-7 w-24" />
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="h-4 w-16" />
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
 export function RiskCards() {
+  const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadMetrics = async () => {
+      try {
+        setLoading(true);
+
+        const response = await fetch("/api/dashboard/metrics", {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error("Unable to load metrics.");
+        }
+
+        const data = (await response.json()) as DashboardMetrics;
+
+        if (!cancelled) {
+          setMetrics(data);
+        }
+      } catch {
+        if (!cancelled) {
+          setMetrics({
+            stuckRuns: 0,
+            mismatchRateAvg24h: 0,
+            supplierHealthScore: 0,
+            estimatedExposure24h: 0,
+          });
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadMetrics();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const riskMetrics = useMemo(() => {
+    const current = metrics ?? {
+      stuckRuns: 0,
+      mismatchRateAvg24h: 0,
+      supplierHealthScore: 0,
+      estimatedExposure24h: 0,
+    };
+
+    return [
+      {
+        title: "Stuck Runs",
+        value: formatCompactNumber(current.stuckRuns),
+        trend: current.stuckRuns > 10 ? "+elevated" : "stable",
+        trendDirection: current.stuckRuns > 10 ? "up" : "down",
+        trendTone: current.stuckRuns > 10 ? "danger" : "success",
+        caption: "last 24h",
+        severity: current.stuckRuns > 10 ? "danger" : "warning",
+        icon: AlertTriangle,
+      },
+      {
+        title: "Mismatch Rate",
+        value: `${current.mismatchRateAvg24h.toFixed(2)}%`,
+        trend: current.mismatchRateAvg24h > 5 ? "+high" : "improving",
+        trendDirection: current.mismatchRateAvg24h > 5 ? "up" : "down",
+        trendTone: current.mismatchRateAvg24h > 5 ? "danger" : "success",
+        caption: "last 24h",
+        severity: current.mismatchRateAvg24h > 5 ? "danger" : "warning",
+        icon: Activity,
+      },
+      {
+        title: "Supplier Health",
+        value: `${current.supplierHealthScore} / 100`,
+        trend: current.supplierHealthScore > 85 ? "strong" : "watch",
+        trendDirection: current.supplierHealthScore > 85 ? "up" : "down",
+        trendTone: current.supplierHealthScore > 85 ? "success" : "warning",
+        caption: "quality index",
+        severity: current.supplierHealthScore > 85 ? "success" : "warning",
+        icon: ShieldCheck,
+      },
+      {
+        title: "Estimated Exposure",
+        value: formatCurrencyUsd(current.estimatedExposure24h),
+        trend: current.estimatedExposure24h > 100000 ? "+high" : "controlled",
+        trendDirection: current.estimatedExposure24h > 100000 ? "up" : "down",
+        trendTone: current.estimatedExposure24h > 100000 ? "warning" : "success",
+        caption: "last 24h",
+        severity: current.estimatedExposure24h > 100000 ? "warning" : "success",
+        icon: Wallet,
+      },
+    ] as const;
+  }, [metrics]);
+
   return (
     <section className="space-y-6" aria-label="Risk indicators">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {riskMetrics.map((metric) => {
-          const Icon = metric.icon;
+      {loading ? (
+        <MetricsSkeleton />
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {riskMetrics.map((metric) => {
+            const Icon = metric.icon;
 
-          return (
-            <motion.div
-              key={metric.title}
-              whileHover={{ y: -4 }}
-              transition={{ duration: 0.18, ease: "easeOut" }}
-            >
-              <Card className="h-full border-white/55 p-0 dark:border-slate-800/85">
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm text-muted-foreground">{metric.title}</CardTitle>
-                    <Icon className={cn("h-4 w-4", metricStyles[metric.severity])} />
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <p className="text-2xl font-semibold tracking-tight">{metric.value}</p>
-                  <div className="flex items-center justify-between">
+            return (
+              <motion.div
+                key={metric.title}
+                whileHover={{ y: -4 }}
+                transition={{ duration: 0.18, ease: "easeOut" }}
+              >
+                <Card className="h-full border-white/55 p-0 dark:border-slate-800/85">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-sm text-muted-foreground">{metric.title}</CardTitle>
+                      <Icon className={cn("h-4 w-4", metricStyles[metric.severity])} />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <p className="text-2xl font-semibold tracking-tight">{metric.value}</p>
                     <div className="flex items-center gap-1.5 text-xs font-medium">
                       {metric.trendDirection === "up" ? (
                         <ArrowUpRight className={cn("h-3.5 w-3.5", trendStyles[metric.trendTone])} />
@@ -139,33 +206,29 @@ export function RiskCards() {
                       )}
                       <span className={trendStyles[metric.trendTone]}>{metric.trend}</span>
                     </div>
-                    {metric.title === "Mismatch Rate" ? <Sparkline /> : null}
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs text-muted-foreground">{metric.caption}</p>
-                    <Badge
-                      variant={
-                        metric.severity === "danger"
-                          ? "danger"
-                          : metric.severity === "warning"
-                            ? "warning"
-                            : "success"
-                      }
-                    >
-                      {metric.severity}
-                    </Badge>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          );
-        })}
-      </div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground">{metric.caption}</p>
+                      <Badge
+                        variant={
+                          metric.severity === "danger"
+                            ? "danger"
+                            : metric.severity === "warning"
+                              ? "warning"
+                              : "success"
+                        }
+                      >
+                        {metric.severity}
+                      </Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            );
+          })}
+        </div>
+      )}
 
-      <motion.div
-        whileHover={{ y: -4 }}
-        transition={{ duration: 0.18, ease: "easeOut" }}
-      >
+      <motion.div whileHover={{ y: -4 }} transition={{ duration: 0.18, ease: "easeOut" }}>
         <Card className="border-white/55 dark:border-slate-800/85">
           <CardHeader>
             <CardTitle>Mismatch rate (7 days)</CardTitle>

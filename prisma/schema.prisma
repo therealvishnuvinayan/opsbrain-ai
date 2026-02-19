@@ -7,6 +7,53 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum RunMode {
+  FILE
+  SYSTEM
+}
+
+enum RunStatus {
+  INITIATED
+  UPLOAD_COMPLETED
+  IN_PROGRESS
+  FETCHED_FROM_SUPPLIER
+  VALIDATED
+  BUFFER_IN_PROGRESS
+  INSERTED_TO_BUFFER
+  COMPLETED
+  PARTIALLY_COMPLETED
+  DISCARDED
+  FAILED
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IssueType {
+  NOT_FOUND_IN_BAMBOO
+  SUPPLIER_FETCH_FAILED
+  ALREADY_PROCESSED
+  EXPIRED
+  INVALID_PRODUCT_BRAND
+  INVALID_SUPPLIER
+  DUPLICATE_CODE_OR_URL
+  VALIDATION_ERROR
+  AMBIGUOUS_MATCH
+}
+
+enum ActionType {
+  APPROVE_MOVE_TO_BUFFER
+  DISCARD_RUN
+  RERUN_STAGE
+  GENERATE_EVIDENCE_BUNDLE
+  CREATE_JIRA_TICKET
+  ADD_NOTE
+}
+
 model User {
   id            String    @id @default(cuid())
   name          String?
@@ -61,4 +108,88 @@ model VerificationToken {
   expires    DateTime
 
   @@id([identifier, token])
+}
+
+model ReconciliationRun {
+  id               String    @id @default(cuid())
+  processId        String    @unique
+  mode             RunMode
+  status           RunStatus
+  entityType       String
+  entityName       String
+  currency         String
+  dateFrom         DateTime
+  dateTo           DateTime
+  totalRecords     Int
+  failedRecords    Int
+  unmatchedRecords Int
+  bufferedRecords  Int
+  mismatchRate     Float
+  estimatedExposure Int
+  riskScore        Int
+  severity         Severity
+  uploadedByEmail  String?
+  approvedByEmail  String?
+  uploadedAt       DateTime
+  approvedAt       DateTime?
+  events           RunEvent[]
+  issues           RunIssue[]
+  actions          ActionLog[]
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([status, uploadedAt])
+  @@index([entityName, uploadedAt])
+  @@index([severity, uploadedAt])
+  @@index([createdAt])
+}
+
+model RunEvent {
+  id       String   @id @default(cuid())
+  runId    String
+  at       DateTime
+  type     String
+  message  String
+  severity Severity
+  metaJson Json?
+
+  run ReconciliationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, at])
+}
+
+model RunIssue {
+  id                   String    @id @default(cuid())
+  runId                String
+  issueType            IssueType
+  severity             Severity
+  supplierIdentifier   String?
+  supplierOrderNumber  String?
+  cardId               String?
+  orderId              String?
+  productSku           String?
+  brandName            String?
+  errorMessage         String?
+  createdAt            DateTime  @default(now())
+
+  run ReconciliationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, issueType])
+  @@index([runId, severity])
+  @@index([createdAt])
+}
+
+model ActionLog {
+  id          String     @id @default(cuid())
+  runId       String?
+  actionType  ActionType
+  actorEmail  String?
+  note        String?
+  payloadJson Json?
+  createdAt   DateTime   @default(now())
+
+  run ReconciliationRun? @relation(fields: [runId], references: [id], onDelete: SetNull)
+
+  @@index([runId, createdAt])
+  @@index([actionType, createdAt])
 }
