@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { Bell, Moon, Search, Sun } from "lucide-react";
+import { Bell, LogOut, Moon, Search, Sun, UserCircle2 } from "lucide-react";
+import { signOut, useSession } from "next-auth/react";
+import { usePathname } from "next/navigation";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -17,9 +17,23 @@ const routeTitles: Record<string, string> = {
   "/actions": "Actions",
 };
 
+function getInitials(value: string) {
+  const initials = value
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+
+  return initials || "OB";
+}
+
 export function Topbar() {
   const pathname = usePathname();
+  const { data: session } = useSession();
+
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   const currentTitle = routeTitles[pathname] ?? "Command Center";
 
@@ -27,8 +41,13 @@ export function Topbar() {
     if (pathname === "/") {
       return "OpsBrain / Dashboard";
     }
+
     return `OpsBrain / ${currentTitle}`;
   }, [currentTitle, pathname]);
+
+  const displayName = session?.user?.name?.trim() || "Ops Operator";
+  const displayEmail = session?.user?.email || "Authenticated session";
+  const initials = getInitials(displayName);
 
   useEffect(() => {
     const savedTheme = window.localStorage.getItem("opsbrain-theme") as
@@ -51,6 +70,15 @@ export function Topbar() {
     setTheme(nextTheme);
     document.documentElement.classList.toggle("dark", nextTheme === "dark");
     window.localStorage.setItem("opsbrain-theme", nextTheme);
+  };
+
+  const handleSignOut = async () => {
+    try {
+      setIsSigningOut(true);
+      await signOut({ callbackUrl: "/auth/login" });
+    } finally {
+      setIsSigningOut(false);
+    }
   };
 
   return (
@@ -92,31 +120,47 @@ export function Topbar() {
           </Button>
 
           <details className="relative">
-            <summary className="list-none cursor-pointer rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <summary className="flex list-none cursor-pointer items-center gap-2 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
               <span className="sr-only">User menu</span>
+              <div className="hidden text-right sm:block">
+                <p className="max-w-[160px] truncate text-sm font-medium text-foreground">
+                  {displayName}
+                </p>
+                <p className="max-w-[160px] truncate text-xs text-muted-foreground">
+                  {displayEmail}
+                </p>
+              </div>
               <Avatar>
-                <AvatarFallback>VA</AvatarFallback>
+                {session?.user?.image ? (
+                  <AvatarImage src={session.user.image} alt={displayName} />
+                ) : null}
+                <AvatarFallback>{initials}</AvatarFallback>
               </Avatar>
             </summary>
-            <div className="absolute right-0 mt-2 w-48 rounded-xl border border-white/50 bg-white/95 p-1 text-sm shadow-glass dark:border-slate-700 dark:bg-slate-900/95">
-              <Link
-                href="#"
-                className="block rounded-lg px-3 py-2 text-muted-foreground hover:bg-secondary/70 hover:text-foreground"
+            <div className="absolute right-0 mt-2 w-56 rounded-xl border border-white/50 bg-white/95 p-1 text-sm shadow-glass dark:border-slate-700 dark:bg-slate-900/95">
+              <div className="rounded-lg px-3 py-2">
+                <p className="truncate text-sm font-medium text-foreground">{displayName}</p>
+                <p className="truncate text-xs text-muted-foreground">{displayEmail}</p>
+              </div>
+
+              <button
+                type="button"
+                disabled
+                className="flex w-full cursor-default items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground"
               >
-                Profile
-              </Link>
-              <Link
-                href="#"
-                className="block rounded-lg px-3 py-2 text-muted-foreground hover:bg-secondary/70 hover:text-foreground"
+                <UserCircle2 className="h-4 w-4" />
+                Profile (coming soon)
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSignOut}
+                disabled={isSigningOut}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-70"
               >
-                Settings
-              </Link>
-              <Link
-                href="#"
-                className="block rounded-lg px-3 py-2 text-muted-foreground hover:bg-secondary/70 hover:text-foreground"
-              >
-                Sign out
-              </Link>
+                <LogOut className="h-4 w-4" />
+                {isSigningOut ? "Signing out..." : "Sign out"}
+              </button>
             </div>
           </details>
         </div>
