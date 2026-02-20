@@ -45,6 +45,8 @@ export type SearchStatusFilter = "any" | "active" | "delayed" | "failed";
 
 export type SearchDateRange = "24h" | "7d" | "30d";
 
+export type OperationsSearchMode = "lookup" | "ask";
+
 export interface SearchResult {
   type: "order" | "customer" | "supplier";
   id: string;
@@ -67,4 +69,37 @@ export interface AISummary {
   summary: string;
   risk: "Low" | "Medium" | "High";
   nextSteps: string[];
+}
+
+export interface AIRecommendedAction {
+  label: string;
+  href: string;
+}
+
+export interface AIStructuredResponse {
+  diagnosis?: string;
+  keyFindings: string[];
+  evidence: string[];
+  recommendedActions: AIRecommendedAction[];
+}
+
+export interface AIEntityCitations {
+  orders: string[];
+  customers: string[];
+  suppliers: string[];
+}
+
+export interface AIResponse {
+  answerMarkdown: string;
+  structured: AIStructuredResponse;
+  entities: AIEntityCitations;
+  suggestedPrompts: string[];
+}
+
+export interface OperationsChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  createdAt: string;
+  response?: AIResponse;
 }
