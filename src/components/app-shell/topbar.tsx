@@ -17,6 +17,18 @@ const routeTitles: Record<string, string> = {
   "/actions": "Actions",
 };
 
+function resolveRouteTitle(pathname: string) {
+  if (pathname === "/") {
+    return routeTitles["/"];
+  }
+
+  const matched = Object.entries(routeTitles).find(
+    ([route]) => route !== "/" && pathname.startsWith(route)
+  );
+
+  return matched?.[1] ?? "Command Center";
+}
+
 function getInitials(value: string) {
   const initials = value
     .split(" ")
@@ -35,7 +47,7 @@ export function Topbar() {
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [isSigningOut, setIsSigningOut] = useState(false);
 
-  const currentTitle = routeTitles[pathname] ?? "Command Center";
+  const currentTitle = resolveRouteTitle(pathname);
 
   const breadcrumb = useMemo(() => {
     if (pathname === "/") {
