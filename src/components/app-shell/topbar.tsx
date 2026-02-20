@@ -13,6 +13,11 @@ const routeTitles: Record<string, string> = {
   "/": "Dashboard",
   "/runs": "Runs",
   "/investigation": "Investigation",
+  "/operations/search": "Search",
+  "/operations/orders": "Orders",
+  "/operations/customers": "Customers",
+  "/operations/suppliers": "Suppliers",
+  "/operations": "Operations",
   "/knowledge": "Knowledge",
   "/actions": "Actions",
 };
@@ -22,9 +27,12 @@ function resolveRouteTitle(pathname: string) {
     return routeTitles["/"];
   }
 
-  const matched = Object.entries(routeTitles).find(
-    ([route]) => route !== "/" && pathname.startsWith(route)
-  );
+  const matched = Object.entries(routeTitles)
+    .filter(
+      ([route]) =>
+        route !== "/" && (pathname === route || pathname.startsWith(`${route}/`))
+    )
+    .sort((a, b) => b[0].length - a[0].length)[0];
 
   return matched?.[1] ?? "Command Center";
 }
