@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { askOpsBrain, canUseBackendApi, fetchOperationsData } from "@/features/operations/api";
 import { respondToQuestion } from "@/features/operations/aiResponder";
 import { ChatThread } from "@/features/operations/components/chat-thread";
 import { EntitiesPanel } from "@/features/operations/components/entities-panel";
@@ -114,6 +115,7 @@ export function OperationsSearchView() {
   const [askInput, setAskInput] = useState("");
   const [chatMessages, setChatMessages] = useState<OperationsChatMessage[]>([]);
   const [isAssistantThinking, setIsAssistantThinking] = useState(false);
+  const [backendConnected, setBackendConnected] = useState(false);
 
   const hasInitializedLookup = useRef(false);
   const askTimerRef = useRef<number | null>(null);
@@ -126,6 +128,7 @@ export function OperationsSearchView() {
     }),
     []
   );
+  const [runtimeData, setRuntimeData] = useState(data);
 
   useEffect(() => {
     const storedSearches = window.localStorage.getItem(RECENT_SEARCHES_KEY);
@@ -149,15 +152,52 @@ export function OperationsSearchView() {
       return;
     }
 
-    setIsSearching(true);
-
     const timeout = window.setTimeout(() => {
       setDebouncedLookupQuery(lookupQuery);
-      setIsSearching(false);
     }, 300);
 
     return () => window.clearTimeout(timeout);
   }, [dateRange, entityType, lookupQuery, statusFilter]);
+
+  useEffect(() => {
+    let disposed = false;
+
+    const hydrateFromBackend = async () => {
+      if (!canUseBackendApi()) {
+        setBackendConnected(false);
+        setRuntimeData(data);
+        setIsSearching(false);
+        return;
+      }
+
+      setIsSearching(true);
+
+      try {
+        const next = await fetchOperationsData(debouncedLookupQuery);
+        if (disposed) {
+          return;
+        }
+        setRuntimeData(next);
+        setBackendConnected(true);
+      } catch {
+        if (disposed) {
+          return;
+        }
+        setRuntimeData(data);
+        setBackendConnected(false);
+      } finally {
+        if (!disposed) {
+          setIsSearching(false);
+        }
+      }
+    };
+
+    void hydrateFromBackend();
+
+    return () => {
+      disposed = true;
+    };
+  }, [data, debouncedLookupQuery]);
 
   useEffect(() => {
     const normalized = debouncedLookupQuery.trim();
@@ -177,8 +217,9 @@ export function OperationsSearchView() {
   }, [debouncedLookupQuery]);
 
   const results = useMemo(
-    () => searchEntities(data, debouncedLookupQuery, entityType, statusFilter, dateRange),
-    [data, dateRange, debouncedLookupQuery, entityType, statusFilter]
+    () =>
+      searchEntities(runtimeData, debouncedLookupQuery, entityType, statusFilter, dateRange),
+    [runtimeData, dateRange, debouncedLookupQuery, entityType, statusFilter]
   );
 
   useEffect(() => {
@@ -255,20 +296,34 @@ export function OperationsSearchView() {
     setAskInput("");
     setIsAssistantThinking(true);
 
-    const response = respondToQuestion(question, data);
     const thinkingDuration = 600 + Math.floor(Math.random() * 600);
 
     askTimerRef.current = window.setTimeout(() => {
-      const assistantMessage: OperationsChatMessage = {
-        id: `msg-assistant-${Date.now()}`,
-        role: "assistant",
-        content: response.answerMarkdown,
-        createdAt: new Date().toISOString(),
-        response,
+      const resolveResponse = async () => {
+        if (canUseBackendApi()) {
+          try {
+            const response = await askOpsBrain(question);
+            return response;
+          } catch {
+            return respondToQuestion(question, runtimeData);
+          }
+        }
+
+        return respondToQuestion(question, runtimeData);
       };
 
-      setChatMessages((current) => [...current, assistantMessage].slice(-20));
-      setIsAssistantThinking(false);
+      void resolveResponse().then((response) => {
+        const assistantMessage: OperationsChatMessage = {
+          id: `msg-assistant-${Date.now()}`,
+          role: "assistant",
+          content: response.answerMarkdown,
+          createdAt: new Date().toISOString(),
+          response,
+        };
+
+        setChatMessages((current) => [...current, assistantMessage].slice(-20));
+        setIsAssistantThinking(false);
+      });
     }, thinkingDuration);
   };
 
@@ -298,9 +353,13 @@ export function OperationsSearchView() {
         <CardContent className="space-y-3 p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <ModeToggle mode={mode} onChange={setMode} />
-            {mode === "ask" ? (
+            {mode === "lookup" ? (
+              <p className="text-xs text-muted-foreground">
+                Data source: {backendConnected ? "Backend API" : "Local mock fallback"}
+              </p>
+            ) : (
               <p className="text-xs text-muted-foreground">Enter to send · Shift+Enter for new line</p>
-            ) : null}
+            )}
           </div>
 
           <OperationsSearchBar
@@ -356,7 +415,7 @@ export function OperationsSearchView() {
 
           <div className="space-y-4">
             <StructuredResponsePanel response={latestResponse} onPromptSelect={setAskInput} />
-            <EntitiesPanel response={latestResponse} data={data} />
+            <EntitiesPanel response={latestResponse} data={runtimeData} />
           </div>
         </div>
       )}

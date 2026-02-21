@@ -1,0 +1,38 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: opsbrain-postgres
+    environment:
+      POSTGRES_DB: opsbrain
+      POSTGRES_USER: opsbrain
+      POSTGRES_PASSWORD: opsbrain
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opsbrain -d opsbrain"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - opsbrain_postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: opsbrain-backend
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://opsbrain:opsbrain@postgres:5432/opsbrain
+      SYNC_DATABASE_URL: postgresql+psycopg://opsbrain:opsbrain@postgres:5432/opsbrain
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./:/app
+
+volumes:
+  opsbrain_postgres_data:

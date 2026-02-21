@@ -315,13 +315,33 @@ export const orders: Order[] = Array.from({ length: 20 }).map((_, index) => {
 });
 
 export function getOrderById(id: string) {
-  return orders.find((order) => order.id === id) ?? null;
+  const normalized = id.toLowerCase();
+  return (
+    orders.find(
+      (order) =>
+        order.id === id || order.orderNumber.toLowerCase() === normalized
+    ) ?? null
+  );
 }
 
 export function getCustomerById(id: string) {
-  return customers.find((customer) => customer.id === id) ?? null;
+  const normalized = id.toLowerCase();
+  return (
+    customers.find(
+      (customer) =>
+        customer.id === id || customer.email.toLowerCase() === normalized
+    ) ?? null
+  );
 }
 
 export function getSupplierById(id: string) {
-  return suppliers.find((supplier) => supplier.id === id) ?? null;
+  const normalized = id.toLowerCase();
+  return (
+    suppliers.find(
+      (supplier) =>
+        supplier.id === id ||
+        supplier.name.toLowerCase() === normalized ||
+        (supplier.domain ? supplier.domain.toLowerCase() === normalized : false)
+    ) ?? null
+  );
 }

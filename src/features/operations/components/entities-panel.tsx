@@ -58,31 +58,70 @@ function EntityGroup({
 
 export function EntitiesPanel({ response, data }: EntitiesPanelProps) {
   const orderItems = (response?.entities.orders ?? [])
-    .map((id) => data.orders.find((order) => order.id === id) ?? null)
-    .filter((order): order is NonNullable<typeof order> => Boolean(order))
+    .map((token) => {
+      const order = data.orders.find(
+        (item) => item.id === token || item.orderNumber.toLowerCase() === token.toLowerCase()
+      );
+
+      if (order) {
+        return {
+          label: order.orderNumber,
+          href: `/operations/orders/${order.id}`,
+        };
+      }
+
+      return {
+        label: token,
+        href: `/operations/orders/${token}`,
+      };
+    })
     .slice(0, 6)
-    .map((order) => ({
-      label: order.orderNumber,
-      href: `/operations/orders/${order.id}`,
-    }));
+    .filter((item, index, all) => all.findIndex((candidate) => candidate.href === item.href) === index);
 
   const customerItems = (response?.entities.customers ?? [])
-    .map((id) => data.customers.find((customer) => customer.id === id) ?? null)
-    .filter((customer): customer is NonNullable<typeof customer> => Boolean(customer))
+    .map((token) => {
+      const customer = data.customers.find(
+        (item) =>
+          item.id === token ||
+          item.email.toLowerCase() === token.toLowerCase() ||
+          item.name.toLowerCase() === token.toLowerCase()
+      );
+
+      if (customer) {
+        return {
+          label: customer.name,
+          href: `/operations/customers/${customer.id}`,
+        };
+      }
+
+      return {
+        label: token,
+        href: `/operations/customers/${token}`,
+      };
+    })
     .slice(0, 6)
-    .map((customer) => ({
-      label: customer.name,
-      href: `/operations/customers/${customer.id}`,
-    }));
+    .filter((item, index, all) => all.findIndex((candidate) => candidate.href === item.href) === index);
 
   const supplierItems = (response?.entities.suppliers ?? [])
-    .map((id) => data.suppliers.find((supplier) => supplier.id === id) ?? null)
-    .filter((supplier): supplier is NonNullable<typeof supplier> => Boolean(supplier))
+    .map((token) => {
+      const supplier = data.suppliers.find(
+        (item) => item.id === token || item.name.toLowerCase() === token.toLowerCase()
+      );
+
+      if (supplier) {
+        return {
+          label: supplier.name,
+          href: `/operations/suppliers/${supplier.id}`,
+        };
+      }
+
+      return {
+        label: token,
+        href: `/operations/suppliers/${token}`,
+      };
+    })
     .slice(0, 6)
-    .map((supplier) => ({
-      label: supplier.name,
-      href: `/operations/suppliers/${supplier.id}`,
-    }));
+    .filter((item, index, all) => all.findIndex((candidate) => candidate.href === item.href) === index);
 
   return (
     <Card className="border-white/15 bg-white/[0.04] backdrop-blur-xl">
