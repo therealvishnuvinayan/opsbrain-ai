@@ -20,6 +20,7 @@ const routeTitles: Record<string, string> = {
   "/operations": "Operations",
   "/knowledge": "Knowledge",
   "/actions": "Actions",
+  "/assistants": "Assistants",
 };
 
 function resolveRouteTitle(pathname: string) {

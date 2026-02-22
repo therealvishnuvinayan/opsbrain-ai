@@ -8,8 +8,8 @@ import { Bot, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 
 import {
   dashboardNavItem,
-  knowledgeNavItem,
   navGroups,
+  standaloneNavItems,
   type SidebarNavGroup,
   type SidebarNavItem,
 } from "@/components/app-shell/sidebar-nav";
@@ -128,12 +128,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
     });
   }, [pathname]);
 
-  const flatCollapsedItems = useMemo(
-    () => [
-      dashboardNavItem,
-      ...navGroups.flatMap((group) => group.items),
-      knowledgeNavItem,
-    ],
+  const collapsedGroupItems = useMemo(
+    () => navGroups.flatMap((group) => group.items),
     []
   );
 
@@ -176,7 +172,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
           {collapsed ? (
             <>
-              {flatCollapsedItems.slice(1, -1).map((item) => (
+              {collapsedGroupItems.map((item) => (
                 <NavLinkItem
                   key={item.href}
                   item={item}
@@ -226,7 +222,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           )}
 
           <div className="my-1 border-t border-white/10" />
-          <NavLinkItem item={knowledgeNavItem} collapsed={collapsed} pathname={pathname} />
+          {standaloneNavItems.map((item) => (
+            <NavLinkItem key={item.href} item={item} collapsed={collapsed} pathname={pathname} />
+          ))}
         </nav>
 
         <div className="mt-auto rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-3">

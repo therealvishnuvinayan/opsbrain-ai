@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   Building2,
   BookOpen,
+  Bot,
   FileSearch,
   LayoutGrid,
   PlayCircle,
@@ -58,6 +59,17 @@ export const knowledgeNavItem: SidebarNavItem = {
   href: "/knowledge",
   icon: BookOpen,
 };
+
+export const assistantsNavItem: SidebarNavItem = {
+  label: "Assistants",
+  href: "/assistants",
+  icon: Bot,
+};
+
+export const standaloneNavItems: SidebarNavItem[] = [
+  assistantsNavItem,
+  knowledgeNavItem,
+];
 
 export const navGroups: SidebarNavGroup[] = [
   reconciliationNavGroup,
