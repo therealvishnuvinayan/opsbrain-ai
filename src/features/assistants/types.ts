@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 
 export interface AssistantAgent {
   id: string;
+  href: string;
   title: string;
   subtitle: string;
   description: string;

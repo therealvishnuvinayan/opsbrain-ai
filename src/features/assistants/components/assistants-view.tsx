@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { ArrowRight, Sparkles } from "lucide-react";
 
@@ -66,14 +67,11 @@ export function AssistantsView() {
                   </ul>
 
                   <div className="flex flex-wrap items-center gap-2 border-t border-white/10 pt-3">
-                    <Button
-                      type="button"
-                      disabled
-                      title="Coming soon"
-                      aria-label={`${agent.title} coming soon`}
-                    >
-                      Open
-                    </Button>
+                    <Link href={agent.href}>
+                      <Button type="button" aria-label={`Open ${agent.title}`}>
+                        Open
+                      </Button>
+                    </Link>
                     <Button
                       type="button"
                       variant="outline"

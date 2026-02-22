@@ -10,6 +10,7 @@ import type { AssistantAgent, AssistantRoadmapItem } from "@/features/assistants
 export const assistants: AssistantAgent[] = [
   {
     id: "ops-intelligence",
+    href: "/assistants/ops-intelligence",
     title: "Ops Intelligence Agent",
     subtitle: "Cross-entity investigation + narrative",
     description:
@@ -33,6 +34,7 @@ export const assistants: AssistantAgent[] = [
   },
   {
     id: "governance-risk",
+    href: "/assistants/governance-risk",
     title: "Governance & Risk Agent",
     subtitle: "Rule simulation + risk heatmap",
     description:
@@ -55,7 +57,8 @@ export const assistants: AssistantAgent[] = [
     icon: ShieldAlert,
   },
   {
-    id: "autonomous-anomaly",
+    id: "anomaly",
+    href: "/assistants/anomaly",
     title: "Autonomous Anomaly Agent",
     subtitle: "Pattern intelligence + early detection",
     description:
@@ -78,7 +81,8 @@ export const assistants: AssistantAgent[] = [
     icon: SearchCheck,
   },
   {
-    id: "tech-support-aws-logs",
+    id: "aws-logs",
+    href: "/assistants/aws-logs",
     title: "Tech Support / AWS Logs Agent",
     subtitle: "Operational log triage + incident clustering",
     description:
@@ -122,3 +126,7 @@ export const roadmap: AssistantRoadmapItem[] = [
     detail: "Roll out autonomous anomaly detection and AWS log triage clustering.",
   },
 ];
+
+export function getAssistantById(assistantId: string) {
+  return assistants.find((assistant) => assistant.id === assistantId) ?? null;
+}
