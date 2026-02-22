@@ -98,8 +98,8 @@ export function CreateCollectionModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 p-4 backdrop-blur-sm md:items-center">
-      <div className="w-full max-w-xl rounded-2xl border border-white/15 bg-slate-950/90 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/80 p-4 backdrop-blur-[2px] md:items-center">
+      <div className="w-full max-w-lg rounded-2xl border border-slate-700/80 bg-slate-950 shadow-2xl">
         <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
           <div>
             <h3 className="text-base font-semibold">

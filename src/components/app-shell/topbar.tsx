@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Bell, LogOut, Moon, Search, Sun, UserCircle2 } from "lucide-react";
+import { Bell, LogOut, Menu, Moon, Search, Sun, UserCircle2 } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
 
@@ -53,8 +53,9 @@ export function Topbar() {
   const pathname = usePathname();
   const { data: session } = useSession();
 
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [avatarImageFailed, setAvatarImageFailed] = useState(false);
 
   const currentTitle = resolveRouteTitle(pathname);
 
@@ -68,7 +69,13 @@ export function Topbar() {
 
   const displayName = session?.user?.name?.trim() || "Ops Operator";
   const displayEmail = session?.user?.email || "Authenticated session";
+  const avatarImage = session?.user?.image?.trim() || "";
+  const showAvatarImage = avatarImage.length > 0 && !avatarImageFailed;
   const initials = getInitials(displayName);
+
+  useEffect(() => {
+    setAvatarImageFailed(false);
+  }, [avatarImage]);
 
   useEffect(() => {
     const savedTheme = window.localStorage.getItem("opsbrain-theme") as
@@ -84,12 +91,14 @@ export function Topbar() {
 
     setTheme(initialTheme);
     document.documentElement.classList.toggle("dark", initialTheme === "dark");
+    document.documentElement.style.colorScheme = initialTheme;
   }, []);
 
   const toggleTheme = () => {
     const nextTheme = theme === "light" ? "dark" : "light";
     setTheme(nextTheme);
     document.documentElement.classList.toggle("dark", nextTheme === "dark");
+    document.documentElement.style.colorScheme = nextTheme;
     window.localStorage.setItem("opsbrain-theme", nextTheme);
   };
 
@@ -105,6 +114,19 @@ export function Topbar() {
   return (
     <header className="sticky top-0 z-30 border-b border-white/40 bg-white/60 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/55">
       <div className="flex h-16 items-center gap-3 px-4 md:px-8">
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Open navigation"
+          className="md:hidden"
+          onClick={() => {
+            const event = new CustomEvent("opsbrain:open-mobile-nav");
+            window.dispatchEvent(event);
+          }}
+        >
+          <Menu className="h-5 w-5" />
+        </Button>
+
         <div className="min-w-0">
           <p className="text-xs text-muted-foreground">{breadcrumb}</p>
           <h1 className="truncate text-base font-semibold md:text-lg">{currentTitle}</h1>
@@ -152,10 +174,14 @@ export function Topbar() {
                 </p>
               </div>
               <Avatar>
-                {session?.user?.image ? (
-                  <AvatarImage src={session.user.image} alt={displayName} />
+                {showAvatarImage ? (
+                  <AvatarImage
+                    src={avatarImage}
+                    alt={displayName}
+                    onError={() => setAvatarImageFailed(true)}
+                  />
                 ) : null}
-                <AvatarFallback>{initials}</AvatarFallback>
+                {!showAvatarImage ? <AvatarFallback>{initials}</AvatarFallback> : null}
               </Avatar>
             </summary>
             <div className="absolute right-0 mt-2 w-56 rounded-xl border border-white/50 bg-white/95 p-1 text-sm shadow-glass dark:border-slate-700 dark:bg-slate-900/95">

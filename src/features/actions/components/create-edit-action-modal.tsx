@@ -239,9 +239,9 @@ export function CreateEditActionModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 p-4 backdrop-blur-sm md:items-center">
-      <div className="max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-white/15 bg-slate-950/95 shadow-2xl">
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-slate-950/95 px-5 py-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-[2px] sm:p-6">
+      <div className="flex h-[min(82vh,760px)] w-[min(94vw,840px)] flex-col overflow-hidden rounded-2xl border border-slate-700/80 bg-slate-950 shadow-2xl">
+        <div className="flex items-center justify-between border-b border-white/10 px-4 py-4 md:px-5">
           <div>
             <h3 className="text-base font-semibold">{editing ? "Edit Action" : "Create Action"}</h3>
             <p className="text-xs text-muted-foreground">
@@ -253,8 +253,9 @@ export function CreateEditActionModal({
           </Button>
         </div>
 
-        <div className="space-y-4 p-5">
-          <div className="grid gap-3 md:grid-cols-2">
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-auto px-4 py-4 md:px-5">
+          <div className="min-w-[620px] space-y-4 pr-2 md:min-w-0">
+            <div className="grid gap-3 md:grid-cols-2">
             <div className="space-y-1.5 md:col-span-2">
               <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Name
@@ -678,75 +679,76 @@ export function CreateEditActionModal({
                 </div>
               </div>
             ))}
-          </section>
+            </section>
 
-          <section className="space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-4">
-            <p className="text-sm font-semibold">Safety</p>
-            <div className="grid gap-2 md:grid-cols-2">
-              <label className="flex items-center justify-between rounded-xl border border-white/10 px-3 py-2 text-sm">
-                Requires approval
-                <input
-                  type="checkbox"
-                  checked={draft.requiresApproval}
+            <section className="space-y-3 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+              <p className="text-sm font-semibold">Safety</p>
+              <div className="grid gap-2 md:grid-cols-2">
+                <label className="flex items-center justify-between rounded-xl border border-white/10 px-3 py-2 text-sm">
+                  Requires approval
+                  <input
+                    type="checkbox"
+                    checked={draft.requiresApproval}
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        requiresApproval: event.target.checked,
+                      }))
+                    }
+                    className="h-4 w-4 rounded border-white/30 bg-transparent"
+                  />
+                </label>
+                <Input
+                  value={draft.approverRole}
                   onChange={(event) =>
                     setDraft((current) => ({
                       ...current,
-                      requiresApproval: event.target.checked,
+                      approverRole: event.target.value,
                     }))
                   }
-                  className="h-4 w-4 rounded border-white/30 bg-transparent"
+                  placeholder="Approver role"
                 />
-              </label>
-              <Input
-                value={draft.approverRole}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...current,
-                    approverRole: event.target.value,
-                  }))
-                }
-                placeholder="Approver role"
-              />
-              <Input
-                value={draft.maxScope}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...current,
-                    maxScope: event.target.value,
-                  }))
-                }
-                placeholder="Max scope"
-              />
-              <div className="rounded-xl border border-white/10 px-3 py-2">
-                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Allowed environments
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {environments.map((env) => (
-                    <label key={env} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <input
-                        type="checkbox"
-                        checked={draft.allowedEnvs.includes(env)}
-                        onChange={(event) =>
-                          setDraft((current) => ({
-                            ...current,
-                            allowedEnvs: event.target.checked
-                              ? [...current.allowedEnvs, env]
-                              : current.allowedEnvs.filter((item) => item !== env),
-                          }))
-                        }
-                        className="h-4 w-4 rounded border-white/30 bg-transparent"
-                      />
-                      {env.toUpperCase()}
-                    </label>
-                  ))}
+                <Input
+                  value={draft.maxScope}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      maxScope: event.target.value,
+                    }))
+                  }
+                  placeholder="Max scope"
+                />
+                <div className="rounded-xl border border-white/10 px-3 py-2">
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Allowed environments
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {environments.map((env) => (
+                      <label key={env} className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          checked={draft.allowedEnvs.includes(env)}
+                          onChange={(event) =>
+                            setDraft((current) => ({
+                              ...current,
+                              allowedEnvs: event.target.checked
+                                ? [...current.allowedEnvs, env]
+                                : current.allowedEnvs.filter((item) => item !== env),
+                            }))
+                          }
+                          className="h-4 w-4 rounded border-white/30 bg-transparent"
+                        />
+                        {env.toUpperCase()}
+                      </label>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
-          </section>
+            </section>
+          </div>
         </div>
 
-        <div className="sticky bottom-0 z-10 flex justify-end gap-2 border-t border-white/10 bg-slate-950/95 px-5 py-4">
+        <div className="flex justify-end gap-2 border-t border-white/10 bg-slate-950 px-4 py-4 md:px-5">
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>

@@ -40,8 +40,8 @@ export function AssistantLearnMoreModal({
   const Icon = agent.icon;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/65 p-4 backdrop-blur-sm md:items-center">
-      <div className="w-full max-w-3xl rounded-2xl border border-white/15 bg-slate-950/95 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/80 p-4 backdrop-blur-[2px] md:items-center">
+      <div className="w-full max-w-2xl rounded-2xl border border-slate-700/80 bg-slate-950 shadow-2xl">
         <div className="flex items-start justify-between border-b border-white/10 px-5 py-4">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2">

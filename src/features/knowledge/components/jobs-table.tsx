@@ -135,8 +135,8 @@ export function JobsTable({ jobs, sources, isLoading = false, onRetry }: JobsTab
       </Card>
 
       {selectedJob ? (
-        <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/45 backdrop-blur-[1px]">
-          <aside className="h-full w-full max-w-2xl border-l border-white/15 bg-slate-950/95 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/75 backdrop-blur-[2px]">
+          <aside className="h-full w-full max-w-2xl border-l border-slate-700/80 bg-slate-950 shadow-2xl">
             <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
               <div>
                 <h3 className="text-base font-semibold">Job Logs • {selectedJob.id}</h3>

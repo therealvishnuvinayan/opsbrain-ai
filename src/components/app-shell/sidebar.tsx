@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Bot, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -66,16 +66,26 @@ interface NavLinkItemProps {
   collapsed: boolean;
   pathname: string;
   nested?: boolean;
+  onPrefetch?: (href: string) => void;
 }
 
-function NavLinkItem({ item, collapsed, pathname, nested = false }: NavLinkItemProps) {
+function NavLinkItem({
+  item,
+  collapsed,
+  pathname,
+  nested = false,
+  onPrefetch,
+}: NavLinkItemProps) {
   const active = isActivePath(pathname, item.href);
   const Icon = item.icon;
 
   return (
     <Link
       href={item.href}
+      prefetch
       title={collapsed ? item.label : undefined}
+      onMouseEnter={() => onPrefetch?.(item.href)}
+      onFocus={() => onPrefetch?.(item.href)}
       className={cn(
         "group flex items-center gap-3 rounded-xl py-2.5 text-sm font-medium transition-colors",
         collapsed ? "px-3" : nested ? "pl-7 pr-3" : "px-3",
@@ -91,9 +101,20 @@ function NavLinkItem({ item, collapsed, pathname, nested = false }: NavLinkItemP
 }
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
+  const router = useRouter();
   const pathname = usePathname();
   const [groupState, setGroupState] = useState<GroupExpansionState>(DEFAULT_GROUP_STATE);
   const [hydrated, setHydrated] = useState(false);
+  const prefetchedRef = useRef<Set<string>>(new Set());
+
+  const prefetchHref = (href: string) => {
+    if (prefetchedRef.current.has(href)) {
+      return;
+    }
+
+    prefetchedRef.current.add(href);
+    router.prefetch(href);
+  };
 
   useEffect(() => {
     const stored = window.localStorage.getItem(GROUP_STORAGE_KEY);
@@ -168,7 +189,12 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         </div>
 
         <nav className="space-y-2">
-          <NavLinkItem item={dashboardNavItem} collapsed={collapsed} pathname={pathname} />
+          <NavLinkItem
+            item={dashboardNavItem}
+            collapsed={collapsed}
+            pathname={pathname}
+            onPrefetch={prefetchHref}
+          />
 
           {collapsed ? (
             <>
@@ -178,6 +204,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   item={item}
                   collapsed={collapsed}
                   pathname={pathname}
+                  onPrefetch={prefetchHref}
                 />
               ))}
             </>
@@ -213,6 +240,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                         collapsed={collapsed}
                         pathname={pathname}
                         nested
+                        onPrefetch={prefetchHref}
                       />
                     ))}
                   </div>
@@ -223,7 +251,13 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
           <div className="my-1 border-t border-white/10" />
           {standaloneNavItems.map((item) => (
-            <NavLinkItem key={item.href} item={item} collapsed={collapsed} pathname={pathname} />
+            <NavLinkItem
+              key={item.href}
+              item={item}
+              collapsed={collapsed}
+              pathname={pathname}
+              onPrefetch={prefetchHref}
+            />
           ))}
         </nav>
 

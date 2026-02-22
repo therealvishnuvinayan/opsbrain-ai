@@ -133,8 +133,8 @@ export function SourceDetailsDrawer({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/45 backdrop-blur-[1px]">
-      <aside className="flex h-full w-full max-w-xl flex-col border-l border-white/15 bg-slate-950/95 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/75 backdrop-blur-[2px]">
+      <aside className="flex h-full w-full max-w-xl flex-col border-l border-slate-700/80 bg-slate-950 shadow-2xl">
         <div className="flex items-start justify-between border-b border-white/10 px-5 py-4">
           <div className="space-y-1">
             <h3 className="text-base font-semibold">{source.name}</h3>

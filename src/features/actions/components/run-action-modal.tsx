@@ -98,8 +98,8 @@ export function RunActionModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/60 p-4 backdrop-blur-sm md:items-center">
-      <div className="w-full max-w-2xl rounded-2xl border border-white/15 bg-slate-950/95 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-[2px] sm:p-6">
+      <div className="flex max-h-[82vh] w-[min(92vw,620px)] flex-col overflow-hidden rounded-2xl border border-slate-700/80 bg-slate-950 shadow-2xl">
         <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
           <div>
             <h3 className="text-base font-semibold">Run Action Now</h3>
@@ -110,7 +110,7 @@ export function RunActionModal({
           </Button>
         </div>
 
-        <div className="space-y-4 p-5">
+        <div className="min-h-0 space-y-4 overflow-y-auto overflow-x-auto px-4 py-4 md:px-5">
           <div className="grid gap-3 md:grid-cols-2">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -201,7 +201,7 @@ export function RunActionModal({
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-white/10 px-5 py-4">
+        <div className="flex justify-end gap-2 border-t border-white/10 bg-slate-950 px-4 py-4 md:px-5">
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>

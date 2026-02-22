@@ -19,6 +19,13 @@ interface ConsoleAction {
   href: string;
 }
 
+interface AttachedDocument {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+}
+
 interface CommandResponse {
   summary: string;
   diagnosis: string;
@@ -35,25 +42,33 @@ const emptyResponse: CommandResponse = {
   sourceLabel: "",
 };
 
-const CONTEXT_ATTACHMENTS = [
-  "Supplier reconciliation logs from last 6 hours",
-  "Run anomaly digest for high-risk mismatches",
-  "Escalation notes from Finance Ops channel",
-];
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
 
-function buildQuestion(prompt: string, context: string[]) {
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function buildQuestion(prompt: string, files: AttachedDocument[]) {
   const cleanPrompt = prompt.trim();
-  if (context.length === 0) {
+  if (files.length === 0) {
     return cleanPrompt;
   }
 
-  const contextBlock = context.map((item, index) => `${index + 1}. ${item}`).join("\n");
+  const attachmentsBlock = files
+    .map((file, index) => `${index + 1}. ${file.name} (${formatFileSize(file.size)}, ${file.type || "unknown"})`)
+    .join("\n");
 
   if (!cleanPrompt) {
-    return `Investigate current operational risk using attached context.\n\nAttached context:\n${contextBlock}`;
+    return `Investigate current operational risk using attached documents.\n\nAttached files:\n${attachmentsBlock}`;
   }
 
-  return `${cleanPrompt}\n\nAttached context:\n${contextBlock}`;
+  return `${cleanPrompt}\n\nAttached files:\n${attachmentsBlock}`;
 }
 
 function mapToCommandResponse(response: AIResponse, source: "backend" | "fallback"): CommandResponse {
@@ -77,9 +92,9 @@ export function CommandConsole() {
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<CommandResponse>(emptyResponse);
-  const [attachedContext, setAttachedContext] = useState<string[]>([]);
-  const [contextCursor, setContextCursor] = useState(0);
+  const [attachedDocuments, setAttachedDocuments] = useState<AttachedDocument[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const requestRef = useRef(0);
 
   const runInvestigation = async () => {
@@ -87,7 +102,7 @@ export function CommandConsole() {
       return;
     }
 
-    if (!prompt.trim() && attachedContext.length === 0) {
+    if (!prompt.trim() && attachedDocuments.length === 0) {
       setError("Add a question or attach context before running investigation.");
       return;
     }
@@ -97,7 +112,7 @@ export function CommandConsole() {
     const requestId = requestRef.current + 1;
     requestRef.current = requestId;
 
-    const question = buildQuestion(prompt, attachedContext);
+    const question = buildQuestion(prompt, attachedDocuments);
 
     try {
       let result: AIResponse;
@@ -134,11 +149,39 @@ export function CommandConsole() {
   };
 
   const attachContext = () => {
-    const nextContext = CONTEXT_ATTACHMENTS[contextCursor % CONTEXT_ATTACHMENTS.length];
-    setAttachedContext((current) =>
-      current.includes(nextContext) ? current : [...current, nextContext]
-    );
-    setContextCursor((current) => current + 1);
+    fileInputRef.current?.click();
+  };
+
+  const handleFilesSelected = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+
+    if (!files || files.length === 0) {
+      return;
+    }
+
+    const nextDocuments = Array.from(files).map((file) => ({
+      id: `${file.name}-${file.size}-${file.lastModified}`,
+      name: file.name,
+      size: file.size,
+      type: file.type,
+    }));
+
+    setAttachedDocuments((current) => {
+      const seen = new Set(current.map((item) => item.id));
+      const merged = [...current];
+
+      for (const document of nextDocuments) {
+        if (!seen.has(document.id)) {
+          merged.push(document);
+          seen.add(document.id);
+        }
+      }
+
+      return merged;
+    });
+
+    // reset input so selecting the same file again still triggers change
+    event.target.value = "";
   };
 
   return (
@@ -151,6 +194,16 @@ export function CommandConsole() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={handleFilesSelected}
+            accept=".txt,.csv,.json,.md,.pdf,.doc,.docx,.log,.rtf"
+            aria-hidden
+            tabIndex={-1}
+          />
           <Textarea
             aria-label="Ask OpsBrain"
             value={prompt}
@@ -173,27 +226,30 @@ export function CommandConsole() {
               Attach context
             </Button>
           </div>
-          {attachedContext.length > 0 ? (
+          {attachedDocuments.length > 0 ? (
             <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Attached Context
+                Attached Documents
               </p>
               <div className="flex flex-wrap gap-2">
-                {attachedContext.map((item) => (
+                {attachedDocuments.map((file) => (
                   <button
-                    key={item}
+                    key={file.id}
                     type="button"
                     onClick={() =>
-                      setAttachedContext((current) =>
-                        current.filter((contextItem) => contextItem !== item)
+                      setAttachedDocuments((current) =>
+                        current.filter((item) => item.id !== file.id)
                       )
                     }
                     className="rounded-lg border border-white/10 bg-white/[0.02] px-2.5 py-1 text-xs text-muted-foreground transition hover:border-white/30 hover:text-foreground"
                   >
-                    {item}
+                    {file.name} • {formatFileSize(file.size)}
                   </button>
                 ))}
               </div>
+              <p className="text-xs text-muted-foreground">
+                Files stay in-browser in demo mode; metadata is included in the investigation prompt.
+              </p>
             </div>
           ) : null}
           {error ? (

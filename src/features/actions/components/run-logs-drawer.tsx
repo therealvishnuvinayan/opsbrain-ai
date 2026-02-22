@@ -32,8 +32,8 @@ export function RunLogsDrawer({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/45 backdrop-blur-[1px]">
-      <aside className="flex h-full w-full max-w-2xl flex-col border-l border-white/15 bg-slate-950/95 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/75 backdrop-blur-[2px]">
+      <aside className="flex h-full w-full max-w-2xl flex-col border-l border-slate-700/80 bg-slate-950 shadow-2xl">
         <div className="flex items-start justify-between border-b border-white/10 px-5 py-4">
           <div>
             <h3 className="text-base font-semibold">{run.id}</h3>
