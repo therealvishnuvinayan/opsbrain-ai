@@ -21,7 +21,9 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://opsbrain:opsbrain@localhost:5432/opsbrain"
     sync_database_url: str = "postgresql+psycopg://opsbrain:opsbrain@localhost:5432/opsbrain"
 
-    cors_origins: str = Field(default="http://localhost:3000")
+    cors_origins: str = Field(
+        default="http://localhost:3000,http://127.0.0.1:3000,https://opsbrain-ai.vercel.app"
+    )
 
     openai_api_key: str | None = None
     openai_chat_model: str = "gpt-4o-mini"
@@ -29,6 +31,15 @@ class Settings(BaseSettings):
     embedding_dimensions: int = 1536
 
     service_api_key: str | None = None
+
+    external_request_timeout_sec: float = 15.0
+    max_webhook_payload_bytes: int = 1_048_576
+
+    zendesk_webhook_secret: str | None = None
+    zendesk_subdomain: str | None = None
+    zendesk_email: str | None = None
+    zendesk_api_token: str | None = None
+    zendesk_postback_enabled: bool = False
 
     @property
     def cors_origins_list(self) -> list[str]:

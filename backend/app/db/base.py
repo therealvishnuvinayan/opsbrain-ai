@@ -14,3 +14,4 @@ def load_all_models() -> None:
     from app.models import order  # noqa: F401
     from app.models import run  # noqa: F401
     from app.models import supplier  # noqa: F401
+    from app.models import zendesk_autopilot_case  # noqa: F401

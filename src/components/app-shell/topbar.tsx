@@ -21,6 +21,7 @@ const routeTitles: Record<string, string> = {
   "/knowledge": "Knowledge",
   "/actions": "Actions",
   "/assistants": "Assistants",
+  "/zendesk": "Zendesk Autopilot",
 };
 
 function resolveRouteTitle(pathname: string) {

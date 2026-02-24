@@ -4,6 +4,7 @@ import {
   BookOpen,
   Bot,
   FileSearch,
+  LifeBuoy,
   LayoutGrid,
   PlayCircle,
   Search,
@@ -66,7 +67,14 @@ export const assistantsNavItem: SidebarNavItem = {
   icon: Bot,
 };
 
+export const zendeskAutopilotNavItem: SidebarNavItem = {
+  label: "Zendesk Autopilot",
+  href: "/zendesk",
+  icon: LifeBuoy,
+};
+
 export const standaloneNavItems: SidebarNavItem[] = [
+  zendeskAutopilotNavItem,
   assistantsNavItem,
   knowledgeNavItem,
 ];
