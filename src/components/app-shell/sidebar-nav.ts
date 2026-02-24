@@ -6,6 +6,7 @@ import {
   FileSearch,
   LifeBuoy,
   LayoutGrid,
+  Rocket,
   PlayCircle,
   Search,
   ShoppingCart,
@@ -20,7 +21,7 @@ export interface SidebarNavItem {
 }
 
 export interface SidebarNavGroup {
-  key: "reconciliation" | "operations";
+  key: "reconciliation" | "operations" | "techTools";
   label: string;
   items: SidebarNavItem[];
   defaultExpanded: boolean;
@@ -55,6 +56,19 @@ export const operationsNavGroup: SidebarNavGroup = {
   ],
 };
 
+export const techToolsNavGroup: SidebarNavGroup = {
+  key: "techTools",
+  label: "Tech Tools",
+  defaultExpanded: false,
+  items: [
+    {
+      label: "Feature Env Builder",
+      href: "/tech/feature-env",
+      icon: Rocket,
+    },
+  ],
+};
+
 export const knowledgeNavItem: SidebarNavItem = {
   label: "Knowledge",
   href: "/knowledge",
@@ -82,4 +96,5 @@ export const standaloneNavItems: SidebarNavItem[] = [
 export const navGroups: SidebarNavGroup[] = [
   reconciliationNavGroup,
   operationsNavGroup,
+  techToolsNavGroup,
 ];

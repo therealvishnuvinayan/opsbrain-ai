@@ -29,6 +29,7 @@ const GROUP_STORAGE_KEY = "opsbrain.sidebar.groups";
 const DEFAULT_GROUP_STATE: GroupExpansionState = {
   reconciliation: true,
   operations: false,
+  techTools: false,
 };
 
 function isActivePath(pathname: string, href: string) {
@@ -55,6 +56,10 @@ function parseStoredGroupState(value: string | null): GroupExpansionState {
         typeof parsed.operations === "boolean"
           ? parsed.operations
           : DEFAULT_GROUP_STATE.operations,
+      techTools:
+        typeof parsed.techTools === "boolean"
+          ? parsed.techTools
+          : DEFAULT_GROUP_STATE.techTools,
     };
   } catch {
     return DEFAULT_GROUP_STATE;

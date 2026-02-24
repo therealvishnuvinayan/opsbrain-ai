@@ -18,6 +18,8 @@ const routeTitles: Record<string, string> = {
   "/operations/customers": "Customers",
   "/operations/suppliers": "Suppliers",
   "/operations": "Operations",
+  "/tech/feature-env": "Feature Env Builder",
+  "/tech": "Tech Tools",
   "/knowledge": "Knowledge",
   "/actions": "Actions",
   "/assistants": "Assistants",
