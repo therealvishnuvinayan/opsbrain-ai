@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
+from app.core.config import get_settings
 from app.core.security import require_service_api_key
 from app.schemas.ask import AskRequest, AskResponse
 from app.services.embeddings import EmbeddingService
@@ -16,12 +17,23 @@ async def ask_opsbrain(
     payload: AskRequest,
     session: AsyncSession = Depends(get_db),
 ) -> AskResponse:
-    return await ask_question(
-        session,
-        question=payload.question,
-        order_numbers_hint=payload.entity_hints.order_numbers,
-        customer_ids_hint=payload.entity_hints.customer_ids,
-        supplier_ids_hint=payload.entity_hints.supplier_ids,
-        k=payload.k,
-        embedding_service=embedding_service,
-    )
+    settings = get_settings()
+
+    if not settings.openai_api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="OPENAI_API_KEY is not configured for live OpsBrain responses.",
+        )
+
+    try:
+        return await ask_question(
+            session,
+            question=payload.question,
+            order_numbers_hint=payload.entity_hints.order_numbers,
+            customer_ids_hint=payload.entity_hints.customer_ids,
+            supplier_ids_hint=payload.entity_hints.supplier_ids,
+            k=payload.k,
+            embedding_service=embedding_service,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc

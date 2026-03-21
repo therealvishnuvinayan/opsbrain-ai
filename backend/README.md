@@ -12,7 +12,7 @@ Async FastAPI backend for OpsBrain AI with:
 - SQLAlchemy sync migrations via psycopg (Alembic)
 - Alembic migrations
 - pgvector
-- OpenAI SDK (with deterministic fallback when key is missing)
+- OpenAI SDK for live OpsBrain responses
 
 ## Project Structure
 ```text
@@ -60,7 +60,12 @@ docker compose up --build
 
 Backend: `http://localhost:8000`
 
-Postgres: `localhost:5432`
+Postgres: `localhost:5433` by default
+
+If `5433` is also occupied, override the host bind:
+```bash
+POSTGRES_HOST_PORT=5434 docker compose up --build
+```
 
 ## Local Run (without Docker)
 From `backend/`:
@@ -161,5 +166,5 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 ```
 
 ## Notes
-- If `OPENAI_API_KEY` is not set, `/api/ask` returns deterministic mock reasoning from DB context + citations.
+- If `OPENAI_API_KEY` is not set, `/api/ask` returns `503` instead of generating fallback reasoning.
 - Embeddings are optional fallback: if unavailable, ingestion stores chunks without vectors and search falls back to `ILIKE`.

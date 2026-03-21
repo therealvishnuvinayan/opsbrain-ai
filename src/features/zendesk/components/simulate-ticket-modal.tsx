@@ -16,17 +16,13 @@ interface SimulateTicketModalProps {
 }
 
 const DEFAULT_PAYLOAD: ZendeskSimulateTicketInput = {
-  ticket_id: "ZD-12054",
-  subject: "Customer reports delayed payout for order OB-24832",
-  description:
-    "Customer says order OB-24832 remains delayed for 48 hours. Supplier Eneba is mentioned in previous updates. Please investigate and provide next steps.",
-  requester_email: "support.agent@northbridge.io",
+  ticket_id: "",
+  subject: "",
+  description: "",
+  requester_email: "",
   status: "open",
-  tags: ["payout", "delay", "supplier-eneba"],
-  custom_fields: {
-    channel: "email",
-    priority: "high",
-  },
+  tags: [],
+  custom_fields: {},
 };
 
 function prettyJson(value: ZendeskSimulateTicketInput) {
@@ -85,7 +81,7 @@ export function SimulateTicketModal({ open, onClose, onCreated }: SimulateTicket
       const response = await simulateZendeskTicket(parsedPayload);
       onCreated(response.case.ticket_id);
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Failed to simulate ticket.");
+      setError(submitError instanceof Error ? submitError.message : "Failed to process payload.");
     } finally {
       setIsSubmitting(false);
     }
@@ -96,12 +92,12 @@ export function SimulateTicketModal({ open, onClose, onCreated }: SimulateTicket
       <div className="flex h-[min(86vh,820px)] w-[min(94vw,860px)] flex-col overflow-hidden rounded-2xl border border-slate-700/80 bg-slate-950 shadow-2xl">
         <div className="flex items-center justify-between border-b border-white/10 px-4 py-4 md:px-5">
           <div>
-            <h3 className="text-base font-semibold">Simulate Zendesk Ticket</h3>
+            <h3 className="text-base font-semibold">Process Zendesk Payload</h3>
             <p className="text-xs text-muted-foreground">
-              Submit a sample webhook payload and run the same autopilot pipeline.
+              Submit a real Zendesk webhook payload and run the same autopilot pipeline.
             </p>
           </div>
-          <Button variant="ghost" size="icon" aria-label="Close simulate modal" onClick={onClose}>
+          <Button variant="ghost" size="icon" aria-label="Close payload modal" onClick={onClose}>
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -115,7 +111,7 @@ export function SimulateTicketModal({ open, onClose, onCreated }: SimulateTicket
               <Input
                 value={ticketId}
                 onChange={(event) => setTicketId(event.target.value)}
-                placeholder="ZD-12054"
+                placeholder="Real Zendesk ticket ID"
               />
             </div>
 
@@ -130,7 +126,7 @@ export function SimulateTicketModal({ open, onClose, onCreated }: SimulateTicket
                 className="font-mono text-xs"
               />
               <p className="text-xs text-muted-foreground">
-                Tip: include order IDs like <code>OB-24832</code> in subject/description for richer evidence.
+                Include any order, supplier, or customer identifiers that already exist in your production payload.
               </p>
             </div>
 
@@ -148,7 +144,7 @@ export function SimulateTicketModal({ open, onClose, onCreated }: SimulateTicket
           </Button>
           <Button onClick={handleSubmit} disabled={!canSubmit || isSubmitting}>
             {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Run simulation
+            Process payload
           </Button>
         </div>
       </div>

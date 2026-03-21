@@ -134,11 +134,11 @@ export function ZendeskAutopilotView() {
           <Ticket className="mx-auto h-6 w-6 text-muted-foreground" />
           <p className="mt-3 text-sm font-medium">No autopilot cases yet</p>
           <p className="text-sm text-muted-foreground">
-            Simulate a Zendesk ticket to generate investigation output and suggested replies.
+            Submit or replay a real Zendesk payload to generate investigation output and suggested replies.
           </p>
           <Button className="mt-4" onClick={() => setSimulateOpen(true)}>
             <Sparkles className="h-4 w-4" />
-            Simulate Ticket
+            Process Payload
           </Button>
         </CardContent>
       </Card>
@@ -167,7 +167,7 @@ export function ZendeskAutopilotView() {
           </Button>
           <Button onClick={() => setSimulateOpen(true)}>
             <Sparkles className="h-4 w-4" />
-            Simulate Ticket
+            Process Payload
           </Button>
         </div>
       </section>
@@ -176,7 +176,7 @@ export function ZendeskAutopilotView() {
         <CardHeader className="pb-2">
           <CardTitle>Autopilot Cases</CardTitle>
           <CardDescription>
-            Stored outcomes from webhook events and simulated payloads.
+            Stored outcomes from webhook events and manually processed payloads.
           </CardDescription>
         </CardHeader>
         <CardContent>

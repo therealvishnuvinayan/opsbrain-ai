@@ -1,5 +1,5 @@
-import { ZendeskAutopilotView } from "@/features/zendesk/components/zendesk-autopilot-view";
+import { redirect } from "next/navigation";
 
 export default function ZendeskAutopilotPage() {
-  return <ZendeskAutopilotView />;
+  redirect("/");
 }

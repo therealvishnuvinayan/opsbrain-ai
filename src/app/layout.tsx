@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import Script from "next/script";
 
 import { AuthSessionProvider } from "@/components/providers/auth-session-provider";
 
 import "./globals.css";
 
-const inter = Inter({
+const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin"],
   variable: "--font-sans",
   display: "swap",
@@ -19,16 +19,15 @@ const themeInitScript = `
 
   try {
     const savedTheme = localStorage.getItem(storageKey);
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     const theme = savedTheme === "light" || savedTheme === "dark"
       ? savedTheme
-      : (prefersDark ? "dark" : "light");
+      : "light";
 
     root.classList.toggle("dark", theme === "dark");
     root.style.colorScheme = theme;
   } catch {
-    root.classList.add("dark");
-    root.style.colorScheme = "dark";
+    root.classList.remove("dark");
+    root.style.colorScheme = "light";
   }
 })();
 `;
@@ -49,8 +48,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
-      <body className={`${inter.variable} font-sans antialiased`}>
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${plusJakartaSans.variable} font-sans antialiased`}>
         <Script id="opsbrain-theme-init" strategy="beforeInteractive">
           {themeInitScript}
         </Script>

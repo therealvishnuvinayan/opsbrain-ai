@@ -3,23 +3,23 @@
 @tailwind utilities;
 
 :root {
-  --background: 220 33% 98%;
+  --background: 218 44% 99%;
   --foreground: 224 32% 14%;
   --card: 0 0% 100%;
   --card-foreground: 224 32% 14%;
   --popover: 0 0% 100%;
   --popover-foreground: 224 32% 14%;
-  --primary: 229 84% 56%;
+  --primary: 229 92% 60%;
   --primary-foreground: 210 40% 98%;
-  --secondary: 220 30% 94%;
+  --secondary: 220 40% 96%;
   --secondary-foreground: 224 28% 18%;
-  --muted: 220 24% 92%;
+  --muted: 220 32% 95%;
   --muted-foreground: 220 14% 40%;
-  --accent: 216 40% 92%;
+  --accent: 215 48% 95%;
   --accent-foreground: 224 32% 14%;
-  --border: 220 22% 88%;
-  --input: 220 22% 88%;
-  --ring: 229 84% 56%;
+  --border: 220 24% 90%;
+  --input: 220 24% 90%;
+  --ring: 229 92% 60%;
   --success: 151 58% 42%;
   --success-foreground: 151 100% 97%;
   --warning: 35 92% 51%;
@@ -30,23 +30,23 @@
 }
 
 .dark {
-  --background: 222 45% 8%;
+  --background: 226 30% 11%;
   --foreground: 210 40% 96%;
-  --card: 222 40% 10%;
+  --card: 226 28% 13%;
   --card-foreground: 210 40% 96%;
-  --popover: 222 40% 10%;
+  --popover: 226 28% 13%;
   --popover-foreground: 210 40% 96%;
-  --primary: 223 88% 67%;
+  --primary: 226 100% 72%;
   --primary-foreground: 224 71% 4%;
-  --secondary: 223 24% 18%;
+  --secondary: 224 20% 18%;
   --secondary-foreground: 210 40% 92%;
-  --muted: 223 20% 16%;
+  --muted: 224 18% 16%;
   --muted-foreground: 215 20% 67%;
-  --accent: 223 24% 18%;
+  --accent: 224 20% 19%;
   --accent-foreground: 210 40% 92%;
-  --border: 223 20% 20%;
-  --input: 223 20% 20%;
-  --ring: 223 88% 67%;
+  --border: 224 18% 22%;
+  --input: 224 18% 22%;
+  --ring: 226 100% 72%;
   --success: 152 67% 39%;
   --success-foreground: 153 100% 96%;
   --warning: 34 94% 48%;
@@ -63,30 +63,56 @@
   body {
     @apply bg-background text-foreground;
     background-image: radial-gradient(
-        circle at 0% 0%,
-        rgba(56, 114, 255, 0.08),
-        transparent 45%
+        circle at 12% 0%,
+        rgba(125, 211, 252, 0.2),
+        transparent 28%
       ),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.75), rgba(245, 248, 255, 0.9));
+      radial-gradient(circle at 50% 12%, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0) 34%),
+      radial-gradient(circle at 84% 4%, rgba(221, 214, 254, 0.26), transparent 26%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(247, 249, 254, 0.98));
     background-attachment: fixed;
+    min-height: 100vh;
   }
 
   .dark body {
     background-image: radial-gradient(
-        circle at 0% 0%,
-        rgba(95, 141, 255, 0.14),
-        transparent 45%
+        circle at 12% 0%,
+        rgba(59, 130, 246, 0.22),
+        transparent 26%
       ),
-      linear-gradient(180deg, rgba(12, 17, 29, 0.92), rgba(8, 12, 22, 0.96));
+      radial-gradient(circle at 50% 10%, rgba(30, 41, 59, 0.32), rgba(15, 23, 42, 0) 34%),
+      radial-gradient(circle at 84% 2%, rgba(168, 85, 247, 0.18), transparent 24%),
+      linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(11, 18, 32, 0.98));
   }
 }
 
 @layer components {
   .glass-panel {
-    @apply rounded-2xl border border-white/60 bg-white/70 shadow-glass backdrop-blur-sm;
+    @apply rounded-2xl border border-white/70 bg-white/80 shadow-[0_24px_80px_-56px_rgba(16,24,40,0.32)] backdrop-blur-xl;
   }
 
   .dark .glass-panel {
-    @apply border-slate-800/80 bg-slate-950/55;
+    @apply border-slate-800;
+    background-color: rgb(2 6 23 / 0.72);
+  }
+}
+
+@keyframes opsbrain-gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@layer utilities {
+  .animate-opsbrain-gradient {
+    animation: opsbrain-gradient-shift 5.5s linear infinite;
   }
 }

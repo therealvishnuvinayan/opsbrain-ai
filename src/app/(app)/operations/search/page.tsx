@@ -1,5 +1,5 @@
-import { OperationsSearchView } from "@/features/operations/components/operations-search-view";
+import { redirect } from "next/navigation";
 
 export default function OperationsSearchPage() {
-  return <OperationsSearchView />;
+  redirect("/");
 }

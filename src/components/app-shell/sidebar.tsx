@@ -4,10 +4,10 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Bot, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { Bot, ChevronDown } from "lucide-react";
 
 import {
-  dashboardNavItem,
+  workspaceNavItem,
   navGroups,
   standaloneNavItems,
   type SidebarNavGroup,
@@ -29,7 +29,6 @@ const GROUP_STORAGE_KEY = "opsbrain.sidebar.groups";
 const DEFAULT_GROUP_STATE: GroupExpansionState = {
   reconciliation: true,
   operations: false,
-  techTools: false,
 };
 
 function isActivePath(pathname: string, href: string) {
@@ -56,10 +55,6 @@ function parseStoredGroupState(value: string | null): GroupExpansionState {
         typeof parsed.operations === "boolean"
           ? parsed.operations
           : DEFAULT_GROUP_STATE.operations,
-      techTools:
-        typeof parsed.techTools === "boolean"
-          ? parsed.techTools
-          : DEFAULT_GROUP_STATE.techTools,
     };
   } catch {
     return DEFAULT_GROUP_STATE;
@@ -92,11 +87,11 @@ function NavLinkItem({
       onMouseEnter={() => onPrefetch?.(item.href)}
       onFocus={() => onPrefetch?.(item.href)}
       className={cn(
-        "group flex items-center gap-3 rounded-xl py-2.5 text-sm font-medium transition-colors",
+        "group flex items-center gap-3 rounded-2xl py-2.5 text-sm font-medium transition-colors",
         collapsed ? "px-3" : nested ? "pl-7 pr-3" : "px-3",
         active
-          ? "bg-primary/12 text-primary"
-          : "text-muted-foreground hover:bg-secondary/65 hover:text-foreground"
+          ? "bg-white text-foreground shadow-[0_14px_32px_-24px_rgba(16,24,40,0.24)] ring-1 ring-black/[0.04] dark:bg-slate-900 dark:ring-white/[0.06]"
+          : "text-muted-foreground hover:bg-white/72 hover:text-foreground dark:hover:bg-slate-900/72"
       )}
     >
       <Icon className="h-4 w-4 shrink-0" />
@@ -161,41 +156,35 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
   return (
     <motion.aside
-      animate={{ width: collapsed ? 92 : 272 }}
+      animate={{ width: collapsed ? 82 : 232 }}
       transition={{ duration: 0.22, ease: "easeInOut" }}
-      className="sticky top-0 z-40 hidden h-screen shrink-0 border-r border-white/45 bg-white/65 px-3 py-4 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/60 md:block"
+      className="sticky top-4 z-40 m-4 hidden h-[calc(100vh-2rem)] shrink-0 rounded-[28px] border border-slate-200/72 bg-[linear-gradient(180deg,rgba(243,249,255,0.86),rgba(255,255,255,0.72))] px-2.5 py-4 shadow-[0_24px_70px_-54px_rgba(16,24,40,0.16)] backdrop-blur-xl dark:border-white/[0.06] dark:bg-slate-950/72 md:block"
     >
       <div className="flex h-full flex-col">
         <div className="mb-6 flex items-center justify-between gap-2 px-2">
-          <div className="flex items-center gap-3 overflow-hidden">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <Link
+            href="/"
+            title="Go to workspace"
+            className={cn(
+              "flex min-w-0 items-center gap-3 overflow-hidden rounded-2xl transition-colors hover:bg-white/60 dark:hover:bg-slate-900/70",
+              collapsed ? "p-1" : "px-1 py-1.5"
+            )}
+          >
+            <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,rgba(59,130,246,0.14),rgba(139,92,246,0.18))] text-primary dark:bg-[linear-gradient(135deg,rgba(59,130,246,0.24),rgba(139,92,246,0.26))]">
               <Bot className="h-5 w-5" />
             </div>
             {!collapsed && (
               <div className="truncate">
                 <p className="truncate text-sm font-semibold">OpsBrain AI</p>
-                <p className="text-xs text-muted-foreground">Command Center</p>
+                <p className="text-xs text-muted-foreground">AI workspace</p>
               </div>
             )}
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="h-8 w-8 text-muted-foreground hover:text-foreground"
-            onClick={onToggle}
-          >
-            {collapsed ? (
-              <ChevronRight className="h-4 w-4" />
-            ) : (
-              <ChevronLeft className="h-4 w-4" />
-            )}
-          </Button>
+          </Link>
         </div>
 
         <nav className="space-y-2">
           <NavLinkItem
-            item={dashboardNavItem}
+            item={workspaceNavItem}
             collapsed={collapsed}
             pathname={pathname}
             onPrefetch={prefetchHref}
@@ -225,7 +214,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                     }))
                   }
                   aria-expanded={groupState[group.key]}
-                  className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-secondary/40 hover:text-foreground"
+                  className="flex w-full items-center justify-between rounded-xl px-2 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground transition-colors hover:bg-white/70 hover:text-foreground dark:hover:bg-slate-900/72"
                 >
                   <span>{group.label}</span>
                   <ChevronDown
@@ -254,7 +243,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             ))
           )}
 
-          <div className="my-1 border-t border-white/10" />
+          <div className="my-2 border-t border-slate-200/80 dark:border-white/[0.06]" />
           {standaloneNavItems.map((item) => (
             <NavLinkItem
               key={item.href}
@@ -266,8 +255,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           ))}
         </nav>
 
-        <div className="mt-auto rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-3">
-          <div className="flex items-center gap-2">
+        <div className="mt-auto flex justify-center">
+          <div className="rounded-full border border-emerald-500/16 bg-white/72 px-3 py-2 shadow-[0_18px_40px_-34px_rgba(16,24,40,0.16)] dark:bg-slate-950/72">
+            <div className="flex items-center gap-2">
             <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" aria-hidden />
             {!collapsed && (
               <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
@@ -275,6 +265,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               </p>
             )}
           </div>
+        </div>
         </div>
       </div>
     </motion.aside>

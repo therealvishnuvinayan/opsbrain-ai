@@ -147,87 +147,6 @@ async def _retrieve_knowledge(
     return [(chunk, None) for chunk in chunks]
 
 
-def _fallback_answer(
-    *,
-    question: str,
-    context: ContextBundle,
-    chunk_rows: list[tuple[KnowledgeChunk, float | None]],
-) -> dict[str, Any]:
-    order_lines = [
-        f"{order.order_number} ({order.status}, {order.currency} {order.amount})"
-        for order in context.orders[:5]
-    ]
-
-    evidence = []
-
-    for order in context.orders[:4]:
-        evidence.append(
-            f"[orders] {order.order_number} status={order.status} supplier={order.supplier.name if order.supplier else 'unknown'}"
-        )
-
-    for chunk, score in chunk_rows[:4]:
-        score_text = f" score={score:.4f}" if score is not None else ""
-        evidence.append(
-            f"[knowledge]{score_text} {_truncate(chunk.content, 180)}"
-        )
-
-    if not evidence:
-        evidence.append("No indexed knowledge snippets matched this query.")
-
-    key_findings = [
-        f"Matched {len(context.orders)} order records from operational data.",
-        f"Matched {len(context.customers)} customer records and {len(context.suppliers)} supplier records.",
-        f"Retrieved {len(chunk_rows)} knowledge snippets for supporting context.",
-    ]
-
-    summary = (
-        "OpsBrain performed entity lookup and contextual retrieval. "
-        "This response is deterministic because OPENAI_API_KEY is not configured."
-    )
-
-    recommended_actions = []
-
-    if context.orders:
-        recommended_actions.append(
-            {
-                "label": "Open order",
-                "href": f"/operations/orders/{context.orders[0].order_number}",
-            }
-        )
-
-    if context.customers:
-        recommended_actions.append(
-            {
-                "label": "Open customer",
-                "href": f"/operations/customers/{context.customers[0].id}",
-            }
-        )
-
-    recommended_actions.extend(
-        [
-            {"label": "Start investigation", "href": "/investigation"},
-            {"label": "Create action", "href": "/actions"},
-        ]
-    )
-
-    answer = (
-        f"Question: {question}\n"
-        f"Primary operational matches: {', '.join(order_lines) if order_lines else 'none'}\n"
-        "Recommendation: review cited snippets and run investigation for high-risk statuses."
-    )
-
-    return {
-        "answer": answer,
-        "structured": {
-            "summary": summary,
-            "key_findings": key_findings,
-            "evidence": evidence,
-            "recommended_actions": recommended_actions,
-        },
-        "raw_model_output": None,
-    }
-
-
 async def _llm_answer(
     *,
     question: str,
@@ -377,14 +296,11 @@ async def ask_question(
             context=context,
             chunk_rows=chunk_rows,
         )
-    except Exception:
-        llm_payload = None
+    except Exception as exc:
+        raise RuntimeError("OpsBrain could not generate a live response.") from exc
 
-    payload = llm_payload or _fallback_answer(
-        question=question,
-        context=context,
-        chunk_rows=chunk_rows,
-    )
+    if llm_payload is None:
+        raise RuntimeError("OpsBrain could not generate a live response.")
 
     citations: list[CitationOut] = [
         CitationOut(
@@ -396,8 +312,8 @@ async def ask_question(
     ]
 
     return AskResponse(
-        answer=payload["answer"],
-        structured=payload["structured"],
+        answer=llm_payload["answer"],
+        structured=llm_payload["structured"],
         entities={
             "orders": [
                 {
@@ -422,5 +338,5 @@ async def ask_question(
             ],
         },
         citations=citations,
-        raw_model_output=payload.get("raw_model_output"),
+        raw_model_output=llm_payload.get("raw_model_output"),
     )

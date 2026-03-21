@@ -1,29 +1,24 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Bell, LogOut, Menu, Moon, Search, Sun, UserCircle2 } from "lucide-react";
+import { LogOut, Menu, Moon, Sun } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 
 const routeTitles: Record<string, string> = {
-  "/": "Dashboard",
-  "/runs": "Runs",
-  "/investigation": "Investigation",
+  "/": "Workspace",
   "/operations/search": "Search",
   "/operations/orders": "Orders",
   "/operations/customers": "Customers",
   "/operations/suppliers": "Suppliers",
   "/operations": "Operations",
-  "/tech/feature-env": "Feature Env Builder",
-  "/tech": "Tech Tools",
   "/knowledge": "Knowledge",
   "/actions": "Actions",
   "/assistants": "Assistants",
-  "/zendesk": "Zendesk Autopilot",
 };
 
 function resolveRouteTitle(pathname: string) {
@@ -56,7 +51,7 @@ export function Topbar() {
   const pathname = usePathname();
   const { data: session } = useSession();
 
-  const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [theme, setTheme] = useState<"light" | "dark">("light");
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [avatarImageFailed, setAvatarImageFailed] = useState(false);
 
@@ -64,7 +59,7 @@ export function Topbar() {
 
   const breadcrumb = useMemo(() => {
     if (pathname === "/") {
-      return "OpsBrain / Dashboard";
+      return "OpsBrain / Workspace";
     }
 
     return `OpsBrain / ${currentTitle}`;
@@ -86,11 +81,7 @@ export function Topbar() {
       | "dark"
       | null;
 
-    const initialTheme =
-      savedTheme ??
-      (window.matchMedia("(prefers-color-scheme: dark)").matches
-        ? "dark"
-        : "light");
+    const initialTheme = savedTheme ?? "light";
 
     setTheme(initialTheme);
     document.documentElement.classList.toggle("dark", initialTheme === "dark");
@@ -115,13 +106,13 @@ export function Topbar() {
   };
 
   return (
-    <header className="sticky top-0 z-30 border-b border-white/40 bg-white/60 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/55">
-      <div className="flex h-16 items-center gap-3 px-4 md:px-8">
+    <header className="sticky top-0 z-30 px-4 pt-4 md:px-6 lg:px-8">
+      <div className="flex h-16 items-center gap-3 rounded-[26px] border border-slate-200/80 bg-white/76 px-4 shadow-[0_22px_64px_-48px_rgba(16,24,40,0.2)] backdrop-blur-xl dark:border-white/[0.06] dark:bg-slate-950/80 md:px-5">
         <Button
           variant="ghost"
           size="icon"
           aria-label="Open navigation"
-          className="md:hidden"
+          className="rounded-full md:hidden"
           onClick={() => {
             const event = new CustomEvent("opsbrain:open-mobile-nav");
             window.dispatchEvent(event);
@@ -130,32 +121,24 @@ export function Topbar() {
           <Menu className="h-5 w-5" />
         </Button>
 
-        <div className="min-w-0">
-          <p className="text-xs text-muted-foreground">{breadcrumb}</p>
-          <h1 className="truncate text-base font-semibold md:text-lg">{currentTitle}</h1>
-        </div>
-
-        <div className="relative mx-auto hidden w-full max-w-md lg:block">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            aria-label="Global search"
-            placeholder="Search runs, suppliers, incidents..."
-            className="h-10 rounded-xl border-white/55 bg-white/70 pl-9 pr-12 dark:border-slate-700/80 dark:bg-slate-900/70"
-          />
-          <kbd className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded-md border border-border bg-secondary/70 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
-            ⌘K
-          </kbd>
-        </div>
+        <Link
+          href="/"
+          className="min-w-0 rounded-2xl px-1 py-1 transition-colors hover:bg-white/55 dark:hover:bg-slate-900/70"
+        >
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground/85">
+            {pathname === "/" ? "OpsBrain" : breadcrumb}
+          </p>
+          <h1 className="truncate text-sm font-semibold text-slate-900 md:text-base dark:text-white">
+            {currentTitle}
+          </h1>
+        </Link>
 
         <div className="ml-auto flex items-center gap-1 md:gap-2">
-          <Button variant="ghost" size="icon" aria-label="Notifications">
-            <Bell className="h-4 w-4" />
-          </Button>
-
           <Button
             variant="ghost"
             size="icon"
             aria-label="Toggle theme"
+            className="rounded-full"
             onClick={toggleTheme}
           >
             {theme === "light" ? (
@@ -187,7 +170,7 @@ export function Topbar() {
                 {!showAvatarImage ? <AvatarFallback>{initials}</AvatarFallback> : null}
               </Avatar>
             </summary>
-            <div className="absolute right-0 mt-2 w-56 rounded-xl border border-white/50 bg-white/95 p-1 text-sm shadow-glass dark:border-slate-700 dark:bg-slate-900/95">
+            <div className="absolute right-0 mt-2 w-56 rounded-2xl border border-black/[0.05] bg-white/95 p-1 text-sm shadow-[0_24px_80px_-48px_rgba(16,24,40,0.28)] dark:border-white/[0.06] dark:bg-slate-900/95">
               <div className="rounded-lg px-3 py-2">
                 <p className="truncate text-sm font-medium text-foreground">{displayName}</p>
                 <p className="truncate text-xs text-muted-foreground">{displayEmail}</p>
@@ -195,18 +178,9 @@ export function Topbar() {
 
               <button
                 type="button"
-                disabled
-                className="flex w-full cursor-default items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground"
-              >
-                <UserCircle2 className="h-4 w-4" />
-                Profile (coming soon)
-              </button>
-
-              <button
-                type="button"
                 onClick={handleSignOut}
                 disabled={isSigningOut}
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-70"
+                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-70"
               >
                 <LogOut className="h-4 w-4" />
                 {isSigningOut ? "Signing out..." : "Sign out"}
