@@ -124,7 +124,7 @@ export function AppShellLayout({ children }: AppShellLayoutProps) {
     <div className="relative min-h-screen">
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 bg-soft-grid [background-size:32px_32px] opacity-40"
+        className="pointer-events-none absolute inset-0 bg-soft-grid [background-size:32px_32px] opacity-40 dark:opacity-[0.08]"
       />
       <div className="relative flex min-h-screen">
         <Sidebar collapsed={collapsed} onToggle={toggleSidebar} />
