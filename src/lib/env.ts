@@ -17,6 +17,25 @@ function isRealSecret(value: string | undefined) {
   ].includes(trimmed);
 }
 
+function isEnabled(value: string | undefined, defaultValue = false) {
+  if (!value) {
+    return defaultValue;
+  }
+
+  const normalized = value.trim().toLowerCase();
+
+  if (!normalized) {
+    return defaultValue;
+  }
+
+  return ["1", "true", "yes", "on"].includes(normalized);
+}
+
 export const isGoogleOAuthConfigured =
   isRealSecret(process.env.GOOGLE_CLIENT_ID) &&
   isRealSecret(process.env.GOOGLE_CLIENT_SECRET);
+
+export const usePrismaAuthAdapter = isEnabled(
+  process.env.NEXTAUTH_USE_PRISMA_ADAPTER,
+  true
+);
