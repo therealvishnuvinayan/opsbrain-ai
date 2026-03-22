@@ -2,18 +2,39 @@ import { NextResponse } from "next/server";
 
 import { getApiSession } from "@/lib/api-session";
 import {
-  getNormalizedSystemHealth,
-  isSystemHealthQuestion,
-} from "@/lib/bamboo/system-health";
+  getClientOrderHistory,
+  getOrderDetails,
+  getOrderHistory,
+  type OrderHistoryFilters,
+} from "@/lib/bamboo/orders";
 import {
-  buildSystemHealthFallbackAnswer,
-  buildSystemHealthPrompt,
-} from "@/lib/ai/system-health-prompt";
+  buildOrderDetailFallbackAnswer,
+  buildOrderDetailPrompt,
+  buildOrderHistoryFallbackAnswer,
+  buildOrderHistoryPrompt,
+} from "@/lib/ai/order-prompt";
 
 interface QueryRequestBody {
   question?: string;
   conversationId?: string;
 }
+
+type QueryIntent =
+  | {
+      type: "order_history";
+      filters: OrderHistoryFilters;
+      useClientHistory: boolean;
+    }
+  | {
+      type: "order_lookup";
+      orderId: string;
+    }
+  | {
+      type: "missing_order_id";
+    }
+  | {
+      type: "unsupported";
+    };
 
 interface OpenAIChatCompletionResponse {
   choices?: Array<{
@@ -45,18 +66,82 @@ function extractAssistantText(payload: OpenAIChatCompletionResponse) {
   return "";
 }
 
-async function generateSystemHealthAnswer(question: string) {
-  const context = await getNormalizedSystemHealth();
-  const apiKey = process.env.OPENAI_API_KEY?.trim();
+function parseQuestionIntent(question: string): QueryIntent {
+  const normalized = question.trim().toLowerCase();
+  const orderIdMatch =
+    question.match(/\border\s*(?:id|number|no\.?)?\s*[:#-]?\s*([a-z0-9-]{3,})\b/i) ??
+    (normalized.includes("order") ? question.match(/\b([0-9]{3,}|[a-z0-9]{8,})\b/i) : null);
+  const orderId = orderIdMatch?.[1];
+  const asksForHistory =
+    normalized.includes("recent order") ||
+    normalized.includes("order history") ||
+    normalized.includes("recent orders") ||
+    normalized.includes("failed orders") ||
+    normalized.includes("blocked orders") ||
+    normalized.includes("list orders") ||
+    normalized.includes("show orders");
+  const asksForClientOrders = normalized.includes("client order");
+  const asksForSpecificOrder =
+    normalized.includes("order details") ||
+    normalized.includes("order status") ||
+    normalized.includes("status of order") ||
+    normalized.includes("show order") ||
+    normalized.includes("show cards for order") ||
+    normalized.includes("cards for order");
 
-  if (!apiKey) {
+  if (asksForSpecificOrder && !orderId) {
+    return { type: "missing_order_id" };
+  }
+
+  if (orderId && (asksForSpecificOrder || normalized.includes("order"))) {
     return {
-      answer: buildSystemHealthFallbackAnswer(context),
-      sources: [{ type: "swagger" as const, endpoint: "/api/v1.0/BackgroundJob/state" }],
+      type: "order_lookup",
+      orderId,
     };
   }
 
-  const prompt = buildSystemHealthPrompt(question, context);
+  if (asksForHistory) {
+    const filters: OrderHistoryFilters = {
+      PageSize: 10,
+      PageIndex: 0,
+    };
+
+    if (normalized.includes("failed")) {
+      filters.Status = "failed";
+    } else if (normalized.includes("blocked")) {
+      filters.Status = "blocked";
+    } else if (normalized.includes("pending")) {
+      filters.Status = "pending";
+    }
+
+    if (normalized.includes("last 7 days")) {
+      const now = new Date();
+      const sevenDaysAgo = new Date(now);
+      sevenDaysAgo.setDate(now.getDate() - 7);
+      filters.DateFrom = sevenDaysAgo.toISOString();
+      filters.DateTo = now.toISOString();
+    }
+
+    return {
+      type: "order_history",
+      filters,
+      useClientHistory: asksForClientOrders,
+    };
+  }
+
+  return { type: "unsupported" };
+}
+
+async function generateCompletion(options: {
+  system: string;
+  user: string;
+  fallbackAnswer: string;
+}) {
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+
+  if (!apiKey) {
+    return options.fallbackAnswer;
+  }
 
   try {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -69,8 +154,8 @@ async function generateSystemHealthAnswer(question: string) {
         model: process.env.OPENAI_CHAT_MODEL?.trim() || "gpt-4o-mini",
         temperature: 0.2,
         messages: [
-          { role: "system", content: prompt.system },
-          { role: "user", content: prompt.user },
+          { role: "system", content: options.system },
+          { role: "user", content: options.user },
         ],
       }),
       cache: "no-store",
@@ -78,32 +163,20 @@ async function generateSystemHealthAnswer(question: string) {
 
     if (!response.ok) {
       const message = await response.text().catch(() => "");
-      console.error("OpenAI system-health generation failed", {
+      console.error("OpenAI order generation failed", {
         status: response.status,
         body: message.slice(0, 400),
       });
-      return {
-        answer: buildSystemHealthFallbackAnswer(context),
-        sources: [{ type: "swagger" as const, endpoint: "/api/v1.0/BackgroundJob/state" }],
-      };
+      return options.fallbackAnswer;
     }
 
     const payload = (await response.json()) as OpenAIChatCompletionResponse;
-    const answer = extractAssistantText(payload) || buildSystemHealthFallbackAnswer(context);
-
-    return {
-      answer,
-      sources: [{ type: "swagger" as const, endpoint: "/api/v1.0/BackgroundJob/state" }],
-    };
+    return extractAssistantText(payload) || options.fallbackAnswer;
   } catch (error) {
-    console.error("OpenAI system-health generation error", {
+    console.error("OpenAI order generation error", {
       message: error instanceof Error ? error.message : "Unknown OpenAI error",
     });
-
-    return {
-      answer: buildSystemHealthFallbackAnswer(context),
-      sources: [{ type: "swagger" as const, endpoint: "/api/v1.0/BackgroundJob/state" }],
-    };
+    return options.fallbackAnswer;
   }
 }
 
@@ -125,26 +198,61 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: "question is required." }, { status: 400 });
   }
 
-  if (!isSystemHealthQuestion(question)) {
-    return NextResponse.json({
-      answer:
-        "Phase 1 currently supports only Bamboo system health questions using the BackgroundJob state endpoint. Try asking about system status, health checks, or background job health.",
-      sources: [],
-    });
-  }
+  const intent = parseQuestionIntent(question);
 
   try {
-    const result = await generateSystemHealthAnswer(question);
-    return NextResponse.json(result);
+    if (intent.type === "missing_order_id") {
+      return NextResponse.json({
+        answer: "Please include the order id. This first version supports order history and order detail queries by order id.",
+        sources: [],
+      });
+    }
+
+    if (intent.type === "unsupported") {
+      return NextResponse.json({
+        answer:
+          "This first version currently supports order history and order detail queries.",
+        sources: [],
+      });
+    }
+
+    if (intent.type === "order_history") {
+      const result = intent.useClientHistory
+        ? await getClientOrderHistory(intent.filters)
+        : await getOrderHistory(intent.filters);
+      const prompt = buildOrderHistoryPrompt(question, result.context);
+      const answer = await generateCompletion({
+        system: prompt.system,
+        user: prompt.user,
+        fallbackAnswer: buildOrderHistoryFallbackAnswer(result.context),
+      });
+
+      return NextResponse.json({
+        answer,
+        sources: result.sources,
+      });
+    }
+
+    const result = await getOrderDetails(intent.orderId);
+    const prompt = buildOrderDetailPrompt(question, result.context);
+    const answer = await generateCompletion({
+      system: prompt.system,
+      user: prompt.user,
+      fallbackAnswer: buildOrderDetailFallbackAnswer(result.context),
+    });
+
+    return NextResponse.json({
+      answer,
+      sources: result.sources,
+    });
   } catch (error) {
     console.error("AI query route failed", {
       message: error instanceof Error ? error.message : "Unknown AI query failure",
     });
 
     return NextResponse.json({
-      answer:
-        "I couldn't retrieve Bamboo system health right now. Please try again in a moment.",
-      sources: [{ type: "swagger", endpoint: "/api/v1.0/BackgroundJob/state" }],
+      answer: "I couldn't retrieve Bamboo order data right now. Please try again in a moment.",
+      sources: [],
     });
   }
 }

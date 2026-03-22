@@ -16,8 +16,29 @@ function buildBambooUrl(path: string) {
   return `${baseUrl}${nextPath}`;
 }
 
-export async function getBambooJson<T>(path: string): Promise<T> {
-  const url = buildBambooUrl(path);
+type BambooQueryValue = string | number | boolean | null | undefined;
+
+function buildUrlWithQuery(path: string, query?: Record<string, BambooQueryValue>) {
+  const url = new URL(buildBambooUrl(path));
+
+  if (query) {
+    for (const [key, value] of Object.entries(query)) {
+      if (value === null || value === undefined || value === "") {
+        continue;
+      }
+
+      url.searchParams.set(key, String(value));
+    }
+  }
+
+  return url.toString();
+}
+
+export async function getBambooJson<T>(
+  path: string,
+  query?: Record<string, BambooQueryValue>
+): Promise<T> {
+  const url = buildUrlWithQuery(path, query);
   const token = getRequiredEnv("BAMBOO_SWAGGER_BEARER_TOKEN");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12000);
