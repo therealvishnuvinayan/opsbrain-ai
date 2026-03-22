@@ -1,78 +1,84 @@
 "use client";
 
+import { useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import { Plus_Jakarta_Sans } from "next/font/google";
+import { DM_Sans } from "next/font/google";
 import {
-  CircleEllipsis,
-  Code2,
+  Activity,
   Folder,
-  Image as ImageIcon,
   LayoutTemplate,
   MessageSquareText,
   Mic,
-  PenTool,
   Plus,
+  Scale,
+  ShoppingCart,
   SendHorizontal,
   Settings,
   SlidersHorizontal,
   Sparkles,
-  Wand2,
+  Truck,
+  TriangleAlert,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-const plusJakartaSans = Plus_Jakarta_Sans({
+const dmSans = DM_Sans({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
+  weight: ["400", "500", "600", "700"],
   variable: "--font-start-page",
 });
 
 const pageTheme = {
-  "--start-surface": "rgba(255,255,255,0.8)",
-  "--start-surface-strong": "rgba(255,255,255,0.94)",
-  "--start-border": "rgba(214,220,232,0.92)",
-  "--start-border-soft": "rgba(228,232,241,0.88)",
+  "--start-page-bg": "#f7f7f8",
+  "--start-surface": "rgba(255,255,255,0.92)",
+  "--start-surface-strong": "rgba(255,255,255,0.97)",
+  "--start-border": "rgba(221,225,233,0.86)",
+  "--start-border-soft": "rgba(232,235,242,0.92)",
   "--start-muted": "#6f7280",
   "--start-title": "#171923",
-  "--start-hero-left": "rgba(205,242,244,0.88)",
-  "--start-hero-center": "rgba(255,255,255,0.97)",
-  "--start-hero-right": "rgba(225,207,255,0.78)",
-  "--start-hero-border": "rgba(210,221,237,0.9)",
-  "--start-shadow": "0 26px 68px -46px rgba(78,102,155,0.18)",
+  "--start-hero-left": "rgba(191,234,236,0.95)",
+  "--start-hero-center": "rgba(239,242,245,0.96)",
+  "--start-hero-right": "rgba(226,213,247,0.95)",
+  "--start-hero-border": "rgba(220,226,236,0)",
+  "--start-shadow": "none",
   "--start-link": "#6f3fff",
   "--start-link-hover": "#5f31e8",
   "--start-helper": "#838694",
-  "--start-pill-bg": "rgba(255,255,255,0.76)",
-  "--start-pill-border": "rgba(214,220,232,0.92)",
+  "--start-pill-bg": "rgba(255,255,255,0.8)",
+  "--start-pill-border": "rgba(219,223,235,0.92)",
   "--start-pill-text": "#2b2d36",
-  "--start-pill-active-bg": "rgba(255,255,255,0.84)",
+  "--start-pill-active-bg": "rgba(255,255,255,0.92)",
   "--start-pill-active-text": "#312b52",
   "--start-chip-bg": "rgba(255,255,255,0.95)",
   "--start-chip-border": "rgba(207,212,225,0.96)",
   "--start-chip-text": "#2c3040",
-  "--start-chip-shadow": "0 10px 18px -18px rgba(15,23,42,0.18)",
-  "--start-control-bg": "rgba(255,255,255,0.94)",
-  "--start-control-border": "rgba(206,212,223,0.94)",
+  "--start-chip-shadow": "0 8px 18px -20px rgba(15,23,42,0.16)",
+  "--start-control-bg": "rgba(255,255,255,0.92)",
+  "--start-control-border": "rgba(209,214,225,0.9)",
   "--start-control-text": "#1f2330",
-  "--start-control-send-bg": "#eef1f6",
+  "--start-control-send-bg": "#f0f2f7",
   "--start-control-send-text": "#7b8191",
   "--start-composer-placeholder": "#8b8d98",
   "--start-composer-icon": "#232735",
-  "--start-composer-border": "rgba(199,208,238,0.95)",
+  "--start-composer-border": "rgba(221,226,236,0.9)",
   "--start-composer-shadow":
-    "0 24px 64px -48px rgba(95,101,202,0.34), 0 10px 28px -24px rgba(90,209,244,0.25)",
-  "--start-chip-row-border": "rgba(215,220,234,0.86)",
+    "-18px 14px 32px -32px rgba(117,228,238,0.5), 22px 16px 34px -32px rgba(186,146,255,0.42), 0 18px 30px -34px rgba(107,116,148,0.16)",
+  "--start-chip-row-border": "rgba(214,219,232,0.72)",
   "--start-chip-row-bg":
-    "linear-gradient(90deg,rgba(231,251,253,0.82),rgba(248,248,255,0.96),rgba(252,243,255,0.82))",
-  "--start-card-bg": "rgba(255,255,255,0.9)",
-  "--start-card-shadow": "0 18px 30px -30px rgba(15,23,42,0.12)",
-  "--start-card-icon-bg": "#f6f7fb",
+    "linear-gradient(90deg,rgba(240,249,250,0.98) 0%,rgba(241,243,248,0.98) 38%,rgba(236,231,249,0.98) 100%)",
+  "--start-composer-shell":
+    "linear-gradient(90deg, rgba(224,231,239,0.96) 0%, rgba(227,232,240,0.96) 100%)",
+  "--start-card-bg": "rgba(255,255,255,0.72)",
+  "--start-card-shadow": "none",
+  "--start-card-icon-bg": "#f7f8fb",
   "--start-card-title": "#1f2430",
   "--start-card-subtitle": "#7c7f8d",
   "--start-feature-bg": "rgba(255,255,255,0.92)",
-  "--start-feature-shadow": "0 18px 34px -30px rgba(15,23,42,0.1)",
+  "--start-feature-shadow": "0 18px 34px -32px rgba(15,23,42,0.08)",
   "--start-feature-title": "#272b38",
 } as CSSProperties;
+
+const SHOW_CATEGORY_PILLS = false;
 
 const categoryPills = [
   {
@@ -92,52 +98,68 @@ const categoryPills = [
 
 const promptChips = [
   {
-    label: "Design",
-    icon: Wand2,
+    label: "Incidents",
+    icon: TriangleAlert,
+    prompt: "Show me the latest incidents and summarize root causes",
   },
   {
-    label: "Image",
-    icon: ImageIcon,
+    label: "Suppliers",
+    icon: Truck,
+    prompt: "Which suppliers are causing the most issues right now?",
   },
   {
-    label: "Doc",
-    icon: PenTool,
+    label: "Orders",
+    icon: ShoppingCart,
+    prompt: "Show recent blocked or failed orders",
   },
   {
-    label: "Code",
-    icon: Code2,
+    label: "Reconciliation",
+    icon: Scale,
+    prompt: "Find recent reconciliation mismatches",
   },
   {
-    label: "Video clip",
-    icon: CircleEllipsis,
-    suffix: "♛",
+    label: "System health",
+    icon: Activity,
+    prompt: "Summarize current system health across Bamboo services",
   },
 ] as const;
 
-const featureCards = [
+const suggestionCards = [
   {
-    eyebrow: "Write",
-    title: "A review of a book series you recently discovered",
+    eyebrow: "Incidents",
+    title: "Show me the latest incidents and summarize root causes",
     eyebrowClassName: "text-[#14b7dd]",
-    illustration: <WriteIllustration />,
+    accent: "cyan",
   },
   {
-    eyebrow: "Code",
-    title: "A fun memory matching game",
+    eyebrow: "Suppliers",
+    title: "Which suppliers are causing the most failed orders?",
     eyebrowClassName: "text-[#1b8a2e]",
-    illustration: <CodeIllustration />,
+    accent: "emerald",
   },
   {
-    eyebrow: "Image",
-    title: "Inside a mid-century modern apartment",
+    eyebrow: "Orders",
+    title: "Find delayed or blocked orders that need attention today",
     eyebrowClassName: "text-[#2f6cff]",
-    illustration: <ImageIllustration />,
+    accent: "blue",
   },
   {
-    eyebrow: "Video",
-    title: "Create an animation for a digital service app ad",
+    eyebrow: "Reconciliation",
+    title: "Explain the latest reconciliation mismatches and likely causes",
+    eyebrowClassName: "text-[#7c3aed]",
+    accent: "violet",
+  },
+  {
+    eyebrow: "System health",
+    title: "Summarize system health issues across AWS, APIs, and database jobs",
     eyebrowClassName: "text-[#c4691f]",
-    illustration: <VideoIllustration />,
+    accent: "amber",
+  },
+  {
+    eyebrow: "Risk",
+    title: "What operational risks need attention right now?",
+    eyebrowClassName: "text-[#d14343]",
+    accent: "rose",
   },
 ] as const;
 
@@ -153,7 +175,7 @@ function StartPageSection({
   return (
     <section className="space-y-5">
       <div className="flex items-center justify-between gap-4">
-        <h2 className="text-[25px] font-semibold tracking-[-0.05em] text-[var(--start-title)] md:text-[27px]">
+        <h2 className="text-[20px] font-semibold tracking-[-0.045em] text-[var(--start-title)] md:text-[21px]">
           {title}
         </h2>
         {trailing}
@@ -178,8 +200,8 @@ function CategoryPill({
       className={cn(
         "inline-flex h-10 items-center gap-2 rounded-full border px-[14px] text-[14px] font-medium tracking-[-0.02em] transition-all",
         active
-          ? "border-[#8f67ff] bg-[var(--start-pill-active-bg)] text-[var(--start-pill-active-text)] shadow-[0_8px_20px_-18px_rgba(102,66,214,0.42)] dark:border-[rgba(167,139,250,0.38)] dark:bg-[rgba(255,255,255,0.06)] dark:text-white/[0.94] dark:shadow-[0_0_8px_rgba(139,92,246,0.24),0_0_18px_rgba(34,211,238,0.12)]"
-          : "border-[var(--start-pill-border)] bg-[var(--start-pill-bg)] text-[var(--start-pill-text)] dark:border-white/[0.14] dark:bg-white/[0.05] dark:text-white/[0.88]"
+          ? "border-[#8f67ff] bg-[var(--start-pill-active-bg)] text-[var(--start-pill-active-text)] shadow-[0_8px_20px_-18px_rgba(102,66,214,0.42)] dark:border-[rgba(128,99,255,0.64)] dark:bg-[rgba(83,50,165,0.22)] dark:text-white/[0.96] dark:shadow-[0_0_0_1px_rgba(34,211,238,0.16),0_0_18px_rgba(139,92,246,0.18)]"
+          : "border-[var(--start-pill-border)] bg-[var(--start-pill-bg)] text-[var(--start-pill-text)] dark:border-white/[0.18] dark:bg-white/[0.03] dark:text-white/[0.9]"
       )}
     >
       <span
@@ -198,20 +220,20 @@ function CategoryPill({
 function PromptChip({
   label,
   icon: Icon,
-  suffix,
+  onClick,
 }: {
   label: string;
-  icon: typeof Wand2;
-  suffix?: string;
+  icon: typeof TriangleAlert;
+  onClick?: () => void;
 }) {
   return (
     <button
       type="button"
-      className="inline-flex h-[32px] items-center gap-1.5 rounded-full border border-[color:var(--start-chip-border)] bg-[var(--start-chip-bg)] px-[14px] text-[13px] font-medium tracking-[-0.02em] text-[var(--start-chip-text)] shadow-[var(--start-chip-shadow)] transition-all hover:bg-white dark:border-white/[0.12] dark:bg-white/[0.03] dark:text-white/[0.88] dark:hover:bg-white/[0.06] dark:hover:shadow-[0_0_12px_rgba(99,102,241,0.16)]"
+      onClick={onClick}
+      className="inline-flex h-[32px] items-center gap-1.5 rounded-full border border-[color:var(--start-chip-border)] bg-[var(--start-chip-bg)] px-[14px] text-[13px] font-medium tracking-[-0.02em] text-[var(--start-chip-text)] shadow-[var(--start-chip-shadow)] transition-all hover:bg-white dark:border-[rgba(116,103,167,0.48)] dark:bg-[rgba(18,17,27,0.78)] dark:text-white/[0.88] dark:hover:bg-[rgba(33,31,46,0.96)] dark:hover:shadow-none"
     >
       <Icon className="h-3.5 w-3.5 text-[#4d5566] dark:text-white/[0.82]" strokeWidth={1.9} />
       <span>{label}</span>
-      {suffix ? <span className="text-[11px] text-[#f0a52d]">{suffix}</span> : null}
     </button>
   );
 }
@@ -229,8 +251,8 @@ function ComposerControl({
       className={cn(
         "flex h-[40px] w-[40px] items-center justify-center rounded-full border transition-all",
         prominent
-          ? "border-transparent bg-[var(--start-control-send-bg)] text-[var(--start-control-send-text)] dark:bg-[linear-gradient(135deg,#22d3ee_0%,#8b5cf6_100%)] dark:text-white dark:shadow-[0_0_18px_rgba(99,102,241,0.35)]"
-          : "border-[color:var(--start-control-border)] bg-[var(--start-control-bg)] text-[var(--start-control-text)] dark:border-white/[0.12] dark:bg-white/[0.04] dark:text-white/[0.82] dark:hover:bg-white/[0.07] dark:hover:shadow-[0_0_12px_rgba(139,92,246,0.14)]"
+          ? "border-transparent bg-[var(--start-control-send-bg)] text-[var(--start-control-send-text)] dark:border-white/[0.06] dark:bg-white/[0.12] dark:text-white/[0.88] dark:shadow-none"
+          : "border-[color:var(--start-control-border)] bg-[var(--start-control-bg)] text-[var(--start-control-text)] dark:border-white/[0.16] dark:bg-white/[0.02] dark:text-white/[0.82] dark:hover:bg-white/[0.05] dark:hover:shadow-none"
       )}
     >
       <Icon className="h-[17px] w-[17px]" strokeWidth={1.85} />
@@ -238,81 +260,91 @@ function ComposerControl({
   );
 }
 
-function PromptComposer() {
+function PromptComposer({
+  promptText,
+  onPromptSelect,
+}: {
+  promptText: string;
+  onPromptSelect: (value: string) => void;
+}) {
   return (
-    <div className="mx-auto w-full max-w-[1000px]">
+    <div className="mx-auto w-full max-w-[960px]">
       <div
-      className="overflow-hidden rounded-[26px] border border-[color:var(--start-composer-border)] bg-[var(--start-surface-strong)] shadow-[var(--start-composer-shadow)] dark:bg-[linear-gradient(180deg,rgba(9,11,19,0.95)_0%,rgba(12,13,24,0.98)_56%,rgba(15,16,30,0.99)_100%)] dark:backdrop-blur-[12px]"
+        className="relative overflow-hidden rounded-[22px] bg-[image:var(--start-composer-shell)] p-px shadow-[var(--start-composer-shadow)] dark:rounded-[24px] dark:bg-[linear-gradient(90deg,rgba(10,218,238,0.58)_0%,rgba(46,38,93,0.22)_44%,rgba(124,58,237,0.62)_100%)] dark:p-px dark:shadow-[0_0_0_1px_rgba(34,211,238,0.08),0_0_22px_rgba(34,211,238,0.08),0_0_36px_rgba(139,92,246,0.14)] dark:backdrop-blur-[12px]"
       >
-        <div className="relative min-h-[160px] px-5 pb-[58px] pt-5 md:px-6 md:pb-[60px] md:pt-[18px]">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-y-3 left-[-18px] w-14 rounded-full opacity-95 blur-[16px] dark:hidden"
+          style={{
+            background:
+              "linear-gradient(180deg, rgba(121,236,239,0.52) 0%, rgba(157,241,244,0.28) 48%, rgba(255,255,255,0) 100%)",
+          }}
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-y-3 right-[-20px] w-16 rounded-full opacity-95 blur-[18px] dark:hidden"
+          style={{
+            background:
+              "linear-gradient(180deg, rgba(203,174,255,0.24) 0%, rgba(183,137,255,0.42) 42%, rgba(193,152,255,0.24) 72%, rgba(255,255,255,0) 100%)",
+          }}
+        />
+        <div className="relative min-h-[168px] rounded-t-[21px] border border-white/88 border-b-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.994)_0%,rgba(253,253,255,0.982)_100%)] px-[21px] pb-[56px] pt-[20px] dark:rounded-t-[23px] dark:border dark:border-white/[0.03] dark:border-b-0 dark:bg-[linear-gradient(180deg,rgba(23,22,30,0.992)_0%,rgba(26,24,36,0.988)_100%)] md:px-5 md:pb-[58px] md:pt-[18px]">
           <button
             type="button"
             aria-label="Prompt settings"
-            className="absolute right-5 top-[18px] text-[var(--start-composer-icon)] transition-colors hover:text-[#11131a] dark:text-white/[0.82] dark:hover:text-white"
+            className="absolute right-[22px] top-[18px] text-[var(--start-composer-icon)] transition-colors hover:text-[#11131a] dark:text-white/[0.82] dark:hover:text-white"
           >
             <SlidersHorizontal className="h-[17px] w-[17px]" strokeWidth={1.9} />
           </button>
 
-          <p className="max-w-[460px] text-[14px] font-medium tracking-[-0.01em] text-[var(--start-composer-placeholder)] dark:text-white/[0.42]">
-            Describe your idea, and I&apos;ll bring it to life
+          <p className="max-w-[560px] text-[14px] font-medium tracking-[-0.01em] text-[var(--start-composer-placeholder)] dark:text-white/[0.42]">
+            {promptText}
           </p>
 
           <button
             type="button"
             aria-label="Add attachment"
-            className="absolute bottom-[14px] left-5 flex h-[40px] w-[40px] items-center justify-center rounded-full border border-[color:var(--start-control-border)] bg-[var(--start-control-bg)] text-[var(--start-control-text)] shadow-[0_12px_24px_-20px_rgba(15,23,42,0.16)] transition-all hover:bg-white dark:border-white/[0.12] dark:bg-white/[0.035] dark:text-white/[0.82] dark:hover:bg-white/[0.06] dark:hover:shadow-[0_0_10px_rgba(34,211,238,0.12)] md:left-6"
+            className="absolute bottom-[16px] left-[15px] flex h-[40px] w-[40px] items-center justify-center rounded-full border border-[color:var(--start-control-border)] bg-[var(--start-control-bg)] text-[var(--start-control-text)] shadow-none transition-all hover:bg-white dark:border-white/[0.12] dark:bg-white/[0.035] dark:text-white/[0.82] dark:hover:bg-white/[0.06] dark:hover:shadow-[0_0_10px_rgba(34,211,238,0.12)] md:left-[15px]"
           >
             <Plus className="h-[18px] w-[18px]" strokeWidth={1.9} />
           </button>
 
-          <div className="absolute bottom-[10px] right-5 flex items-center gap-2.5 md:right-6">
+          <div className="absolute bottom-[15px] right-[15px] flex items-center gap-2.5 md:right-[16px]">
             <ComposerControl icon={Settings} />
             <ComposerControl icon={Mic} />
             <ComposerControl icon={SendHorizontal} prominent />
           </div>
         </div>
 
-        <div className="border-t border-[color:var(--start-chip-row-border)] bg-[image:var(--start-chip-row-bg)] px-3 py-[8px] md:px-[12px] dark:bg-[linear-gradient(90deg,rgba(14,25,35,0.65),rgba(39,22,74,0.45))]">
+        <div className="border-t border-[color:var(--start-chip-row-border)] bg-[image:var(--start-chip-row-bg)] px-3 py-[8px] md:px-[12px] dark:border-t-white/[0.05] dark:bg-[linear-gradient(90deg,rgba(25,23,40,0.985)_0%,rgba(31,28,52,0.985)_100%)]">
           <div className="flex flex-wrap items-center gap-2">
             {promptChips.map((chip) => (
-              <PromptChip key={chip.label} {...chip} />
+              <PromptChip
+                key={chip.label}
+                label={chip.label}
+                icon={chip.icon}
+                onClick={() => onPromptSelect(chip.prompt)}
+              />
             ))}
           </div>
         </div>
       </div>
-
-      <p className="mt-2.5 text-center text-[12.5px] font-medium text-[var(--start-helper)] dark:text-white/[0.5]">
-        This AI is new and improving.{" "}
-        <a
-          href="#"
-          className="text-[var(--start-link)] underline underline-offset-2 transition-colors hover:text-[var(--start-link-hover)] dark:text-[#a78bfa] dark:hover:text-[#c4b5fd]"
-        >
-          See terms
-        </a>{" "}
-        ·{" "}
-        <a
-          href="#"
-          className="text-[var(--start-link)] underline underline-offset-2 transition-colors hover:text-[var(--start-link-hover)] dark:text-[#a78bfa] dark:hover:text-[#c4b5fd]"
-        >
-          Give feedback
-        </a>
-      </p>
     </div>
   );
 }
 
 function RecentChatCard() {
   return (
-    <div className="max-w-[320px] rounded-[14px] border border-[var(--start-border)] bg-[var(--start-card-bg)] px-[14px] py-[14px] shadow-[var(--start-card-shadow)] transition-all dark:hover:-translate-y-0.5 dark:hover:shadow-[0_0_22px_rgba(139,92,246,0.14)]">
+    <div className="max-w-[304px] rounded-[14px] border border-[var(--start-border)] bg-[var(--start-card-bg)] px-[14px] py-[13px] shadow-[var(--start-card-shadow)] transition-all dark:hover:-translate-y-0.5 dark:hover:shadow-[0_0_22px_rgba(139,92,246,0.14)]">
       <div className="flex items-center gap-4">
-        <div className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-[12px] bg-[var(--start-card-icon-bg)] text-[#555b69] dark:text-white/[0.82]">
+        <div className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-[11px] bg-[var(--start-card-icon-bg)] text-[#555b69] dark:text-white/[0.82]">
           <MessageSquareText className="h-[18px] w-[18px]" strokeWidth={1.9} />
         </div>
         <div className="space-y-1">
-          <p className="text-[15px] font-semibold tracking-[-0.02em] text-[var(--start-card-title)]">
-            Book Series Review
+          <p className="text-[14px] font-semibold tracking-[-0.02em] text-[var(--start-card-title)]">
+            Supplier incident summary
           </p>
-          <p className="text-[13px] text-[var(--start-card-subtitle)]">8 hours ago</p>
+          <p className="text-[12px] text-[var(--start-card-subtitle)]">2 hours ago</p>
         </div>
       </div>
     </div>
@@ -323,133 +355,125 @@ function FeatureCard({
   eyebrow,
   eyebrowClassName,
   title,
-  illustration,
+  accent,
+  onSelect,
 }: {
   eyebrow: string;
   eyebrowClassName: string;
   title: string;
-  illustration: ReactNode;
+  accent: "cyan" | "emerald" | "blue" | "violet" | "amber" | "rose";
+  onSelect: () => void;
 }) {
   return (
-    <article className="flex min-h-[286px] flex-col overflow-hidden rounded-[18px] border border-[var(--start-border)] bg-[var(--start-feature-bg)] px-[16px] pt-[16px] shadow-[var(--start-feature-shadow)] transition-all dark:hover:-translate-y-0.5 dark:hover:shadow-[0_0_22px_rgba(34,211,238,0.12)]">
+    <button
+      type="button"
+      onClick={onSelect}
+      className="flex min-h-[240px] flex-col overflow-hidden rounded-[18px] border border-[var(--start-border)] bg-[var(--start-feature-bg)] px-[16px] pt-[16px] text-left shadow-[var(--start-feature-shadow)] transition-all hover:-translate-y-0.5 dark:hover:shadow-[0_0_22px_rgba(34,211,238,0.12)]"
+    >
       <p className={cn("text-[13px] font-semibold tracking-[-0.02em]", eyebrowClassName)}>{eyebrow}</p>
       <h3 className="mt-[10px] max-w-[220px] text-[15px] leading-[1.5] text-[var(--start-feature-title)]">{title}</h3>
-      <div className="mt-auto pb-4 pt-5">{illustration}</div>
-    </article>
+      <div className="mt-auto pb-4 pt-5">
+        <SuggestionIllustration accent={accent} />
+      </div>
+    </button>
   );
 }
 
-function WriteIllustration() {
-  return (
-    <div className="overflow-hidden rounded-[14px] bg-[linear-gradient(180deg,#f8f5ff_0%,#f5f8ff_100%)] p-4">
-      <div className="h-[88px] rounded-[12px] bg-white/[0.78] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
-        <div className="h-3 w-[68%] rounded-full bg-[linear-gradient(90deg,#63d4da,#ab73ff)]" />
-        <div className="mt-3 h-3 w-[54%] rounded-full bg-[#d6d4f8]" />
-        <div className="mt-2 h-3 w-[76%] rounded-full bg-[#ece8ff]" />
-      </div>
-      <div className="mt-3 flex gap-2">
-        <div className="h-10 flex-1 rounded-[10px] bg-white/[0.85]" />
-        <div className="h-10 w-10 rounded-[10px] bg-[linear-gradient(135deg,#82e7ec,#9f6dff)]" />
-      </div>
-    </div>
-  );
-}
+function SuggestionIllustration({
+  accent,
+}: {
+  accent: "cyan" | "emerald" | "blue" | "violet" | "amber" | "rose";
+}) {
+  const accentStyles = {
+    cyan: "from-[#7de3ea] to-[#8f8bff]",
+    emerald: "from-[#6fd1a0] to-[#95a7ff]",
+    blue: "from-[#6bb8ff] to-[#858cff]",
+    violet: "from-[#aa8dff] to-[#7c5cff]",
+    amber: "from-[#ffb85c] to-[#9e86ff]",
+    rose: "from-[#ff8f9f] to-[#9787ff]",
+  } as const;
 
-function CodeIllustration() {
   return (
-    <div className="overflow-hidden rounded-[14px] bg-[linear-gradient(180deg,#eff8ff_0%,#f7f4ff_100%)] p-4">
-      <div className="flex items-end gap-3">
-        <div className="flex h-[90px] w-[40px] items-end rounded-[10px] bg-[linear-gradient(180deg,#74dce9,#6e98ff)] p-2">
-          <div className="h-5 w-5 rounded-full bg-white/[0.9]" />
-        </div>
-        <div className="h-[90px] w-[40px] rounded-[10px] bg-[linear-gradient(180deg,#9f8fff,#825dff)]" />
-        <div className="h-[90px] w-[40px] rounded-[10px] bg-[linear-gradient(180deg,#b288ff,#9b76ff)]" />
-        <div className="flex-1 rounded-[12px] bg-white/[0.86] p-3">
-          <div className="h-3 w-[80%] rounded-full bg-[#d7defa]" />
-          <div className="mt-2 h-3 w-[58%] rounded-full bg-[#e6eaff]" />
-          <div className="mt-3 grid grid-cols-4 gap-1.5">
-            {Array.from({ length: 8 }).map((_, index) => (
-              <span
-                key={index}
-                className={cn(
-                  "block h-4 rounded-[5px]",
-                  index % 3 === 0
-                    ? "bg-[#9fdce5]"
-                    : index % 2 === 0
-                      ? "bg-[#b49cff]"
-                      : "bg-[#e4dfff]"
-                )}
-              />
-            ))}
-          </div>
+    <div className="overflow-hidden rounded-[14px] bg-[linear-gradient(180deg,rgba(245,247,251,0.94)_0%,rgba(239,242,249,0.98)_100%)] p-4 dark:bg-[linear-gradient(180deg,rgba(22,25,38,0.96)_0%,rgba(17,19,31,0.98)_100%)]">
+      <div className="rounded-[12px] border border-white/60 bg-white/[0.84] p-3 dark:border-white/[0.06] dark:bg-white/[0.03]">
+        <div className={cn("h-3 w-[72%] rounded-full bg-gradient-to-r", accentStyles[accent])} />
+        <div className="mt-3 h-2.5 w-[58%] rounded-full bg-[#dce2f3] dark:bg-white/[0.08]" />
+        <div className="mt-2 h-2.5 w-[82%] rounded-full bg-[#e8ecf8] dark:bg-white/[0.05]" />
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          <div className="h-14 rounded-[10px] bg-[rgba(255,255,255,0.78)] dark:bg-white/[0.04]" />
+          <div className="h-14 rounded-[10px] bg-[rgba(255,255,255,0.58)] dark:bg-white/[0.03]" />
+          <div className={cn("h-14 rounded-[10px] bg-gradient-to-b", accentStyles[accent])} />
         </div>
       </div>
     </div>
   );
 }
 
-function ImageIllustration() {
-  return (
-    <div className="overflow-hidden rounded-[14px] bg-[linear-gradient(180deg,#fbf1e5_0%,#f2f8ff_100%)]">
-      <div className="h-[146px] bg-[linear-gradient(90deg,#c87c33_0%,#dba777_12%,#f8efe5_12%,#f8efe5_72%,#b9d5e8_72%,#e6f3ff_100%)]">
-        <div className="flex h-full items-end gap-4 px-5 pb-4">
-          <div className="h-[60px] w-[86px] rounded-t-[24px] bg-[#ce6f2f]" />
-          <div className="ml-auto h-[80px] w-[92px] rounded-[18px] bg-[rgba(255,255,255,0.55)]" />
-        </div>
-      </div>
-    </div>
-  );
+function getPromptFallback() {
+  return "Ask anything about incidents, suppliers, orders, reconciliations, or system health...";
 }
 
-function VideoIllustration() {
-  return (
-    <div className="overflow-hidden rounded-[14px] bg-[linear-gradient(180deg,#d7beff_0%,#f3ebff_100%)]">
-      <div className="relative h-[146px]">
-        <div className="absolute inset-x-3 bottom-0 top-4 rounded-t-[24px] bg-[linear-gradient(180deg,#8f53ff_0%,#c08fff_100%)]" />
-        <div className="absolute bottom-0 left-1/2 h-[118px] w-[94px] -translate-x-1/2 rounded-t-[40px] bg-[linear-gradient(180deg,#7a3019_0%,#d77d47_55%,#f3b378_100%)]" />
-        <div className="absolute bottom-2 left-1/2 h-[60px] w-[126px] -translate-x-1/2 rounded-t-[60px] bg-[#f6b889]" />
-      </div>
-    </div>
-  );
-}
+export function StartPage({ userFirstName }: { userFirstName?: string | null }) {
+  const [promptText, setPromptText] = useState(getPromptFallback);
+  const welcomeTitle = userFirstName ? `Welcome back, ${userFirstName}` : "Welcome back";
 
-export function StartPage() {
   return (
     <div
       style={pageTheme}
       className={cn(
-        plusJakartaSans.variable,
-        "mx-auto w-full max-w-[1180px] font-[family:var(--font-start-page)] dark:[--start-surface:rgba(9,11,19,0.96)] dark:[--start-surface-strong:rgba(9,11,19,0.96)] dark:[--start-border:rgba(255,255,255,0.06)] dark:[--start-border-soft:rgba(255,255,255,0.08)] dark:[--start-muted:rgba(255,255,255,0.5)] dark:[--start-title:rgba(255,255,255,0.92)] dark:[--start-hero-left:rgba(6,182,212,0.12)] dark:[--start-hero-center:rgba(99,102,241,0.1)] dark:[--start-hero-right:rgba(124,58,237,0.16)] dark:[--start-hero-border:rgba(255,255,255,0.09)] dark:[--start-shadow:0_0_32px_rgba(34,211,238,0.06),0_0_64px_rgba(139,92,246,0.1)] dark:[--start-link:#a78bfa] dark:[--start-link-hover:#c4b5fd] dark:[--start-helper:rgba(255,255,255,0.5)] dark:[--start-chip-row-border:rgba(255,255,255,0.08)] dark:[--start-card-bg:rgba(255,255,255,0.03)] dark:[--start-card-shadow:none] dark:[--start-card-icon-bg:rgba(255,255,255,0.05)] dark:[--start-card-title:rgba(255,255,255,0.9)] dark:[--start-card-subtitle:rgba(255,255,255,0.55)] dark:[--start-feature-bg:rgba(255,255,255,0.03)] dark:[--start-feature-shadow:none] dark:[--start-feature-title:rgba(255,255,255,0.88)]"
+        dmSans.variable,
+        "relative mx-auto w-full max-w-none font-[family:var(--font-start-page)] dark:overflow-visible dark:rounded-none dark:[--start-page-bg:transparent] dark:[--start-surface:rgba(22,21,29,0.98)] dark:[--start-surface-strong:rgba(22,21,29,0.98)] dark:[--start-border:rgba(255,255,255,0.12)] dark:[--start-border-soft:rgba(255,255,255,0.08)] dark:[--start-muted:rgba(255,255,255,0.54)] dark:[--start-title:rgba(255,255,255,0.94)] dark:[--start-hero-left:rgba(15,128,139,0.38)] dark:[--start-hero-center:rgba(26,45,92,0.34)] dark:[--start-hero-right:rgba(101,37,214,0.4)] dark:[--start-hero-border:rgba(128,99,255,0.16)] dark:[--start-shadow:inset_0_1px_0_rgba(255,255,255,0.03)] dark:[--start-link:#a78bfa] dark:[--start-link-hover:#c4b5fd] dark:[--start-helper:rgba(255,255,255,0.54)] dark:[--start-pill-bg:rgba(255,255,255,0.03)] dark:[--start-pill-border:rgba(255,255,255,0.16)] dark:[--start-pill-text:rgba(255,255,255,0.92)] dark:[--start-pill-active-bg:rgba(83,50,165,0.2)] dark:[--start-pill-active-text:rgba(255,255,255,0.96)] dark:[--start-chip-bg:rgba(18,17,27,0.78)] dark:[--start-chip-border:rgba(116,103,167,0.48)] dark:[--start-chip-text:rgba(255,255,255,0.88)] dark:[--start-chip-shadow:none] dark:[--start-control-bg:rgba(255,255,255,0.02)] dark:[--start-control-border:rgba(255,255,255,0.16)] dark:[--start-control-text:rgba(255,255,255,0.88)] dark:[--start-control-send-bg:rgba(255,255,255,0.12)] dark:[--start-control-send-text:rgba(255,255,255,0.88)] dark:[--start-composer-placeholder:rgba(255,255,255,0.5)] dark:[--start-composer-icon:rgba(255,255,255,0.82)] dark:[--start-composer-border:rgba(128,99,255,0.42)] dark:[--start-chip-row-border:rgba(255,255,255,0.05)] dark:[--start-card-bg:rgba(255,255,255,0.02)] dark:[--start-card-shadow:none] dark:[--start-card-icon-bg:rgba(255,255,255,0.06)] dark:[--start-card-title:rgba(255,255,255,0.92)] dark:[--start-card-subtitle:rgba(255,255,255,0.52)] dark:[--start-feature-bg:rgba(255,255,255,0.02)] dark:[--start-feature-shadow:none] dark:[--start-feature-title:rgba(255,255,255,0.9)]"
       )}
     >
-      <div className="space-y-[58px] pb-10">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-[352px] rounded-t-[32px] dark:hidden"
+        style={{
+          backgroundImage:
+            "radial-gradient(circle at 12% 10%, rgba(174,228,233,0.3), transparent 24%), radial-gradient(circle at 88% 10%, rgba(189,151,255,0.18), transparent 22%), linear-gradient(90deg, rgba(191,234,236,0.95) 0%, rgba(239,242,245,0.96) 48%, rgba(226,213,247,0.95) 100%)",
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-[182px] h-[188px] bg-[linear-gradient(180deg,rgba(247,247,248,0)_0%,rgba(247,247,248,0.88)_58%,#f7f7f8_100%)] dark:hidden"
+      />
+      <div className="relative space-y-10 px-4 pb-10 pt-0 md:space-y-[46px] md:px-5">
         <section
-          className="relative overflow-hidden rounded-[34px] border border-[color:var(--start-hero-border)] px-6 pb-10 pt-[54px] md:px-8 md:pb-[46px] md:pt-[60px]"
+          className="relative overflow-hidden px-4 pb-[18px] pt-[54px] md:px-6 md:pb-[24px] md:pt-[60px] dark:rounded-[34px] dark:border dark:border-[color:var(--start-hero-border)]"
           style={{ boxShadow: "var(--start-shadow)" }}
         >
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,var(--start-hero-left)_0%,var(--start-hero-center)_46%,var(--start-hero-right)_100%)] dark:bg-[linear-gradient(135deg,rgba(6,182,212,0.12)_0%,rgba(99,102,241,0.1)_45%,rgba(124,58,237,0.16)_100%)]"
+            className="pointer-events-none absolute inset-0 hidden dark:block dark:bg-[linear-gradient(135deg,rgba(6,182,212,0.12)_0%,rgba(99,102,241,0.1)_45%,rgba(124,58,237,0.16)_100%)]"
           />
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_16%,rgba(177,236,240,0.45),transparent_28%),radial-gradient(circle_at_84%_12%,rgba(217,197,255,0.34),transparent_26%),linear-gradient(180deg,rgba(255,255,255,0.2),rgba(255,255,255,0))] dark:bg-[radial-gradient(circle_at_18%_16%,rgba(34,211,238,0.06),transparent_30%),radial-gradient(circle_at_84%_12%,rgba(139,92,246,0.1),transparent_32%),linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0))]"
+            className="pointer-events-none absolute inset-0 hidden dark:block dark:bg-[radial-gradient(circle_at_18%_16%,rgba(34,211,238,0.06),transparent_30%),radial-gradient(circle_at_84%_12%,rgba(139,92,246,0.1),transparent_32%),linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0))]"
           />
           <div className="relative mx-auto max-w-[1048px]">
-            <div className="space-y-[22px] text-center">
-              <h1 className="text-[42px] font-semibold tracking-[-0.065em] text-transparent [background-image:linear-gradient(90deg,#2c8dff_0%,#6f3fff_84%)] bg-clip-text md:text-[58px] md:leading-[1.03] dark:font-medium dark:[background-image:linear-gradient(90deg,#22d3ee_0%,#60a5fa_45%,#818cf8_100%)] dark:[text-shadow:0_0_18px_rgba(96,165,250,0.18)]">
-                What will you design today?
+            <div className="space-y-4 text-center">
+              <h1 className="text-[34px] font-semibold tracking-[-0.055em] text-transparent [background-image:linear-gradient(90deg,#2c8dff_0%,#6f3fff_84%)] bg-clip-text md:text-[46px] md:leading-[1.04] dark:font-medium dark:[background-image:linear-gradient(90deg,#22d3ee_0%,#60a5fa_45%,#818cf8_100%)] dark:[text-shadow:0_0_18px_rgba(96,165,250,0.18)]">
+                {welcomeTitle}
               </h1>
 
-              <div className="flex flex-wrap items-center justify-center gap-2.5">
-                {categoryPills.map((pill) => (
-                  <CategoryPill key={pill.label} {...pill} />
-                ))}
-              </div>
+              <p className="mx-auto max-w-[680px] text-[15px] font-medium text-[var(--start-muted)] dark:text-white/[0.62]">
+                Ask anything about Bamboo operations, incidents, suppliers, orders, or system health.
+              </p>
+
+              {/*
+                Hidden for now, but kept for later reuse if we want to restore top pills.
+              */}
+              {SHOW_CATEGORY_PILLS ? (
+                <div className="flex flex-wrap items-center justify-center gap-2.5">
+                  {categoryPills.map((pill) => (
+                    <CategoryPill key={pill.label} {...pill} />
+                  ))}
+                </div>
+              ) : null}
             </div>
 
             <div className="mt-[22px] md:mt-[24px]">
-              <PromptComposer />
+              <PromptComposer promptText={promptText} onPromptSelect={setPromptText} />
             </div>
           </div>
         </section>
@@ -468,10 +492,14 @@ export function StartPage() {
           <RecentChatCard />
         </StartPageSection>
 
-        <StartPageSection title="See what you can do with AI">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {featureCards.map((card) => (
-              <FeatureCard key={card.eyebrow} {...card} />
+        <StartPageSection title="Try asking">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {suggestionCards.map((card) => (
+              <FeatureCard
+                key={card.eyebrow}
+                {...card}
+                onSelect={() => setPromptText(card.title)}
+              />
             ))}
           </div>
         </StartPageSection>

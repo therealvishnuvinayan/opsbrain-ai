@@ -28,7 +28,7 @@ export interface SidebarNavGroup {
 }
 
 export const dashboardNavItem: SidebarNavItem = {
-  label: "Dashboard",
+  label: "Home",
   href: "/",
   icon: LayoutGrid,
 };

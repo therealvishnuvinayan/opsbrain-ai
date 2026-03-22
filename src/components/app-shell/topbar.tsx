@@ -8,9 +8,10 @@ import { usePathname } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { applyTheme, getInitialTheme, THEME_STORAGE_KEY } from "@/lib/theme";
 
 const routeTitles: Record<string, string> = {
-  "/": "Dashboard",
+  "/": "Home",
   "/runs": "Runs",
   "/investigation": "Investigation",
   "/operations/search": "Search",
@@ -64,7 +65,7 @@ export function Topbar() {
 
   const breadcrumb = useMemo(() => {
     if (pathname === "/") {
-      return "OpsBrain / Dashboard";
+      return "OpsBrain / Home";
     }
 
     return `OpsBrain / ${currentTitle}`;
@@ -81,28 +82,16 @@ export function Topbar() {
   }, [avatarImage]);
 
   useEffect(() => {
-    const savedTheme = window.localStorage.getItem("opsbrain-theme") as
-      | "light"
-      | "dark"
-      | null;
-
-    const initialTheme =
-      savedTheme ??
-      (window.matchMedia("(prefers-color-scheme: dark)").matches
-        ? "dark"
-        : "light");
-
+    const initialTheme = getInitialTheme();
     setTheme(initialTheme);
-    document.documentElement.classList.toggle("dark", initialTheme === "dark");
-    document.documentElement.style.colorScheme = initialTheme;
+    applyTheme(initialTheme);
   }, []);
 
   const toggleTheme = () => {
     const nextTheme = theme === "light" ? "dark" : "light";
     setTheme(nextTheme);
-    document.documentElement.classList.toggle("dark", nextTheme === "dark");
-    document.documentElement.style.colorScheme = nextTheme;
-    window.localStorage.setItem("opsbrain-theme", nextTheme);
+    applyTheme(nextTheme);
+    window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
   };
 
   const handleSignOut = async () => {
