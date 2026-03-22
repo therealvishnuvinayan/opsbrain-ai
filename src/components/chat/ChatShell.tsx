@@ -5,12 +5,14 @@ import { ArrowLeft } from "lucide-react";
 import { Composer } from "@/components/chat/Composer";
 import { EmptyState } from "@/components/chat/EmptyState";
 import { MessageList } from "@/components/chat/MessageList";
+import { TypingIndicator } from "@/components/chat/TypingIndicator";
 import { useChatStore } from "@/lib/chat/chat.store";
 
 export function ChatShell() {
   const activeConversationId = useChatStore((state) => state.activeConversationId);
   const conversations = useChatStore((state) => state.conversations);
   const messagesByConversation = useChatStore((state) => state.messagesByConversation);
+  const isLoadingConversation = useChatStore((state) => state.isLoadingConversation);
   const goHome = useChatStore((state) => state.goHome);
 
   const activeConversation = conversations.find(
@@ -38,7 +40,15 @@ export function ChatShell() {
         </div>
       </div>
 
-      {messages.length === 0 ? <EmptyState /> : <MessageList messages={messages} />}
+      {isLoadingConversation && messages.length === 0 ? (
+        <div className="flex flex-1 items-center justify-center px-4">
+          <TypingIndicator />
+        </div>
+      ) : messages.length === 0 ? (
+        <EmptyState />
+      ) : (
+        <MessageList messages={messages} />
+      )}
       <Composer />
     </div>
   );

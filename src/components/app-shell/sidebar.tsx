@@ -134,6 +134,7 @@ export function Sidebar({ collapsed, onToggle, variant = "default" }: SidebarPro
   const prefetchedRef = useRef<Set<string>>(new Set());
   const conversations = useChatStore((state) => state.conversations);
   const activeConversationId = useChatStore((state) => state.activeConversationId);
+  const initialize = useChatStore((state) => state.initialize);
   const createConversation = useChatStore((state) => state.createConversation);
   const setActiveConversation = useChatStore((state) => state.setActiveConversation);
   const groupedConversations = groupConversationsByRecency(conversations);
@@ -153,6 +154,10 @@ export function Sidebar({ collapsed, onToggle, variant = "default" }: SidebarPro
     applyTheme(initialTheme);
   }, []);
 
+  useEffect(() => {
+    void initialize();
+  }, [initialize]);
+
   const toggleTheme = () => {
     const nextTheme: AppTheme = theme === "light" ? "dark" : "light";
     setTheme(nextTheme);
@@ -160,9 +165,13 @@ export function Sidebar({ collapsed, onToggle, variant = "default" }: SidebarPro
     window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
   };
 
-  const startNewChat = () => {
-    createConversation("New chat");
-    setIsSidebarExpanded(true);
+  const startNewChat = async () => {
+    try {
+      await createConversation("New chat");
+      setIsSidebarExpanded(true);
+    } catch {
+      setIsSidebarExpanded(true);
+    }
   };
 
   if (variant === "canva") {
@@ -219,7 +228,9 @@ export function Sidebar({ collapsed, onToggle, variant = "default" }: SidebarPro
 
             <button
               type="button"
-              onClick={startNewChat}
+              onClick={() => {
+                void startNewChat();
+              }}
               className="mt-2 flex h-10 w-10 items-center justify-center rounded-[18px] bg-[linear-gradient(135deg,#7c3aed_0%,#9f67ff_100%)] text-white shadow-[0_16px_28px_-20px_rgba(124,58,237,0.58)] transition-transform hover:scale-[1.02] dark:shadow-[0_16px_28px_-18px_rgba(124,58,237,0.72)]"
               aria-label="Start new chat"
             >
@@ -276,7 +287,9 @@ export function Sidebar({ collapsed, onToggle, variant = "default" }: SidebarPro
 
               <button
                 type="button"
-                onClick={startNewChat}
+                onClick={() => {
+                  void startNewChat();
+                }}
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-[16px] bg-[linear-gradient(135deg,#7c3aed_0%,#9f67ff_100%)] px-4 text-[14px] font-semibold text-white shadow-[0_18px_28px_-20px_rgba(124,58,237,0.56)] transition-transform hover:scale-[1.01] dark:shadow-[0_18px_30px_-18px_rgba(124,58,237,0.66)]"
               >
                 <Plus className="h-4 w-4" />
@@ -298,7 +311,9 @@ export function Sidebar({ collapsed, onToggle, variant = "default" }: SidebarPro
                         </p>
                         <button
                           type="button"
-                          onClick={startNewChat}
+                          onClick={() => {
+                            void startNewChat();
+                          }}
                           className="flex h-7 w-7 items-center justify-center rounded-full text-[#7a7593] transition-colors hover:bg-white/80 hover:text-[#4e4966] dark:text-white/[0.54] dark:hover:bg-white/[0.05] dark:hover:text-white/[0.88]"
                           aria-label={`New chat in ${group.toLowerCase()}`}
                         >
@@ -315,7 +330,7 @@ export function Sidebar({ collapsed, onToggle, variant = "default" }: SidebarPro
                               key={item.id}
                               type="button"
                               onClick={() => {
-                                setActiveConversation(item.id);
+                                void setActiveConversation(item.id);
                                 router.push("/");
                               }}
                               className={cn(

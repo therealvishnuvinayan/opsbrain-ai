@@ -46,6 +46,25 @@ export function groupConversationsByRecency(conversations: ChatConversation[]) {
   return groups;
 }
 
+export function formatRelativeTime(value: string) {
+  const date = new Date(value);
+  const diffMs = date.getTime() - Date.now();
+  const formatter = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+
+  const minutes = Math.round(diffMs / (60 * 1000));
+  if (Math.abs(minutes) < 60) {
+    return formatter.format(minutes, "minute");
+  }
+
+  const hours = Math.round(diffMs / (60 * 60 * 1000));
+  if (Math.abs(hours) < 24) {
+    return formatter.format(hours, "hour");
+  }
+
+  const days = Math.round(diffMs / (24 * 60 * 60 * 1000));
+  return formatter.format(days, "day");
+}
+
 export function getMockAssistantReply(input: string) {
   const normalized = input.toLowerCase();
 

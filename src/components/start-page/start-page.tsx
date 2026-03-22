@@ -32,6 +32,7 @@ import {
 import { transcribeOpsBrainAudio } from "@/features/operations/api";
 import { ChatShell } from "@/components/chat/ChatShell";
 import { useChatStore } from "@/lib/chat/chat.store";
+import { formatRelativeTime } from "@/lib/chat/chat.utils";
 import { cn } from "@/lib/utils";
 
 const dmSans = DM_Sans({
@@ -979,20 +980,42 @@ function PromptComposer({
 }
 
 function RecentChatCard() {
+  const conversations = useChatStore((state) => state.conversations);
+  const setActiveConversation = useChatStore((state) => state.setActiveConversation);
+  const recentConversation = conversations[0];
+
+  if (!recentConversation) {
+    return (
+      <div className="max-w-[304px] rounded-[14px] border border-[var(--start-border)] bg-[var(--start-card-bg)] px-[14px] py-[13px] shadow-[var(--start-card-shadow)]">
+        <p className="text-[14px] font-medium text-[var(--start-card-subtitle)]">
+          No recent chats yet.
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-[304px] rounded-[14px] border border-[var(--start-border)] bg-[var(--start-card-bg)] px-[14px] py-[13px] shadow-[var(--start-card-shadow)] transition-all dark:hover:-translate-y-0.5 dark:hover:shadow-[0_0_22px_rgba(139,92,246,0.14)]">
+    <button
+      type="button"
+      onClick={() => {
+        void setActiveConversation(recentConversation.id);
+      }}
+      className="max-w-[304px] rounded-[14px] border border-[var(--start-border)] bg-[var(--start-card-bg)] px-[14px] py-[13px] text-left shadow-[var(--start-card-shadow)] transition-all dark:hover:-translate-y-0.5 dark:hover:shadow-[0_0_22px_rgba(139,92,246,0.14)]"
+    >
       <div className="flex items-center gap-4">
         <div className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-[11px] bg-[var(--start-card-icon-bg)] text-[#555b69] dark:text-white/[0.82]">
           <MessageSquareText className="h-[18px] w-[18px]" strokeWidth={1.9} />
         </div>
         <div className="space-y-1">
           <p className="text-[14px] font-semibold tracking-[-0.02em] text-[var(--start-card-title)]">
-            Supplier incident summary
+            {recentConversation.title}
           </p>
-          <p className="text-[12px] text-[var(--start-card-subtitle)]">2 hours ago</p>
+          <p className="text-[12px] text-[var(--start-card-subtitle)]">
+            {formatRelativeTime(recentConversation.lastUsedAt)}
+          </p>
         </div>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -1057,8 +1080,13 @@ function SuggestionIllustration({
 export function StartPage({ userFirstName }: { userFirstName?: string | null }) {
   const [inputValue, setInputValue] = useState("");
   const viewMode = useChatStore((state) => state.viewMode);
+  const initialize = useChatStore((state) => state.initialize);
   const sendMockMessage = useChatStore((state) => state.sendMockMessage);
   const welcomeTitle = userFirstName ? `Welcome back, ${userFirstName}` : "Welcome back";
+
+  useEffect(() => {
+    void initialize();
+  }, [initialize]);
 
   if (viewMode === "thread") {
     return (
