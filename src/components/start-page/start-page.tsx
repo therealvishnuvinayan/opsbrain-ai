@@ -1,23 +1,26 @@
 "use client";
 
-import { useState } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { ChangeEvent, CSSProperties, ReactNode } from "react";
 import { DM_Sans } from "next/font/google";
 import {
   Activity,
+  Check,
   Folder,
   LayoutTemplate,
+  Maximize2,
   MessageSquareText,
   Mic,
+  Minimize2,
   Plus,
   Scale,
   ShoppingCart,
   SendHorizontal,
-  Settings,
   SlidersHorizontal,
   Sparkles,
   Truck,
   TriangleAlert,
+  Upload,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -79,6 +82,58 @@ const pageTheme = {
 } as CSSProperties;
 
 const SHOW_CATEGORY_PILLS = false;
+const COMPOSER_PLACEHOLDER =
+  "Ask anything about incidents, suppliers, orders, reconciliations, or system health...";
+const COMPLEXITY_LEVELS = ["Low", "Medium", "High", "Deep"] as const;
+
+type ComplexityLevel = (typeof COMPLEXITY_LEVELS)[number];
+
+interface SpeechRecognitionAlternative {
+  transcript: string;
+}
+
+interface SpeechRecognitionResult {
+  0: SpeechRecognitionAlternative;
+  isFinal: boolean;
+  length: number;
+}
+
+interface SpeechRecognitionResultList {
+  [index: number]: SpeechRecognitionResult;
+  length: number;
+}
+
+interface SpeechRecognitionEvent extends Event {
+  resultIndex: number;
+  results: SpeechRecognitionResultList;
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string;
+}
+
+interface SpeechRecognitionInstance extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+  onend: (() => void) | null;
+  start(): void;
+  stop(): void;
+  abort(): void;
+}
+
+interface SpeechRecognitionConstructor {
+  new (): SpeechRecognitionInstance;
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition?: SpeechRecognitionConstructor;
+    webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  }
+}
 
 const categoryPills = [
   {
@@ -238,39 +293,261 @@ function PromptChip({
   );
 }
 
-function ComposerControl({
+function ComposerActionButton({
   icon: Icon,
+  tooltip,
+  onClick,
+  active = false,
+  disabled = false,
   prominent = false,
+  badge,
+  className,
 }: {
-  icon: typeof Settings;
+  icon: typeof Plus;
+  tooltip: string;
+  onClick?: () => void;
+  active?: boolean;
+  disabled?: boolean;
   prominent?: boolean;
+  badge?: string;
+  className?: string;
 }) {
   return (
-    <button
-      type="button"
-      className={cn(
-        "flex h-[40px] w-[40px] items-center justify-center rounded-full border transition-all",
-        prominent
-          ? "border-transparent bg-[var(--start-control-send-bg)] text-[var(--start-control-send-text)] dark:border-white/[0.06] dark:bg-white/[0.12] dark:text-white/[0.88] dark:shadow-none"
-          : "border-[color:var(--start-control-border)] bg-[var(--start-control-bg)] text-[var(--start-control-text)] dark:border-white/[0.16] dark:bg-white/[0.02] dark:text-white/[0.82] dark:hover:bg-white/[0.05] dark:hover:shadow-none"
-      )}
-    >
-      <Icon className="h-[17px] w-[17px]" strokeWidth={1.85} />
-    </button>
+    <div className="group/tooltip relative">
+      <button
+        type="button"
+        aria-label={tooltip}
+        disabled={disabled}
+        onClick={onClick}
+        className={cn(
+          "flex h-[40px] w-[40px] items-center justify-center rounded-full border transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(104,108,255,0.32)] disabled:cursor-not-allowed disabled:opacity-45",
+          prominent
+            ? "border-transparent bg-[var(--start-control-send-bg)] text-[var(--start-control-send-text)] dark:border-white/[0.06] dark:bg-white/[0.12] dark:text-white/[0.88] dark:shadow-none"
+            : "border-[color:var(--start-control-border)] bg-[var(--start-control-bg)] text-[var(--start-control-text)] dark:border-white/[0.16] dark:bg-white/[0.02] dark:text-white/[0.82] dark:hover:bg-white/[0.05] dark:hover:shadow-none",
+          active &&
+            "border-[rgba(89,180,244,0.48)] bg-[rgba(240,248,255,0.96)] text-[#2563eb] dark:border-[rgba(34,211,238,0.32)] dark:bg-[rgba(34,211,238,0.12)] dark:text-white",
+          className
+        )}
+      >
+        <Icon className="h-[17px] w-[17px]" strokeWidth={1.85} />
+        {badge ? (
+          <span className="absolute -bottom-1.5 -right-1 min-w-[18px] rounded-full bg-[linear-gradient(135deg,#4ec8ff,#765bff)] px-1.5 py-[1px] text-center text-[9px] font-semibold leading-none text-white">
+            {badge}
+          </span>
+        ) : null}
+      </button>
+      <span className="pointer-events-none absolute left-1/2 top-[calc(100%+8px)] z-30 -translate-x-1/2 rounded-[10px] bg-[#1f2330] px-2.5 py-1 text-[11px] font-medium text-white opacity-0 shadow-[0_10px_24px_-16px_rgba(15,23,42,0.45)] transition-opacity duration-150 group-hover/tooltip:opacity-100 group-focus-within/tooltip:opacity-100 dark:bg-white dark:text-[#171923]">
+        {tooltip}
+      </span>
+    </div>
   );
 }
 
 function PromptComposer({
-  promptText,
+  inputValue,
+  onInputChange,
   onPromptSelect,
 }: {
-  promptText: string;
+  inputValue: string;
+  onInputChange: (value: string) => void;
   onPromptSelect: (value: string) => void;
 }) {
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const uploadMenuRef = useRef<HTMLDivElement | null>(null);
+  const depthMenuRef = useRef<HTMLDivElement | null>(null);
+  const uploadTriggerRef = useRef<HTMLDivElement | null>(null);
+  const depthTriggerRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const voiceBaseValueRef = useRef("");
+  const [isComposerCompact, setIsComposerCompact] = useState(false);
+  const [isUploadMenuOpen, setIsUploadMenuOpen] = useState(false);
+  const [isDepthMenuOpen, setIsDepthMenuOpen] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isListening, setIsListening] = useState(false);
+  const [voiceSupported, setVoiceSupported] = useState(true);
+  const [micPermissionDenied, setMicPermissionDenied] = useState(false);
+  const [complexityLevel, setComplexityLevel] = useState<ComplexityLevel>("Medium");
+  const [composerNotice, setComposerNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    setVoiceSupported(
+      typeof window !== "undefined" &&
+        Boolean(window.SpeechRecognition || window.webkitSpeechRecognition)
+    );
+  }, []);
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      return;
+    }
+
+    textarea.style.height = "0px";
+    const nextHeight = Math.min(textarea.scrollHeight, isComposerCompact ? 44 : 124);
+    textarea.style.height = `${Math.max(nextHeight, isComposerCompact ? 28 : 84)}px`;
+  }, [inputValue, isComposerCompact]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+
+      if (
+        uploadMenuRef.current &&
+        !uploadMenuRef.current.contains(target) &&
+        uploadTriggerRef.current &&
+        !uploadTriggerRef.current.contains(target)
+      ) {
+        setIsUploadMenuOpen(false);
+      }
+
+      if (
+        depthMenuRef.current &&
+        !depthMenuRef.current.contains(target) &&
+        depthTriggerRef.current &&
+        !depthTriggerRef.current.contains(target)
+      ) {
+        setIsDepthMenuOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsUploadMenuOpen(false);
+        setIsDepthMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      recognitionRef.current?.abort();
+    };
+  }, []);
+
+  const focusComposer = () => {
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+    });
+  };
+
+  const handlePromptPrefill = (value: string) => {
+    setIsComposerCompact(false);
+    setComposerNotice(null);
+    onPromptSelect(value);
+    focusComposer();
+  };
+
+  const handleSubmit = () => {
+    const trimmedValue = inputValue.trim();
+    if (!trimmedValue) {
+      return;
+    }
+
+    console.info("OpsBrain homepage composer submit", {
+      prompt: trimmedValue,
+      complexityLevel,
+      fileName: selectedFile?.name ?? null,
+    });
+    setComposerNotice("Prompt captured locally. Chat execution is not connected yet.");
+  };
+
+  const handleFileSelection = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    setSelectedFile(file);
+    setComposerNotice(null);
+    setIsUploadMenuOpen(false);
+    event.target.value = "";
+    focusComposer();
+  };
+
+  const startVoiceInput = async () => {
+    const SpeechRecognitionApi =
+      typeof window !== "undefined"
+        ? window.SpeechRecognition || window.webkitSpeechRecognition
+        : undefined;
+
+    if (!SpeechRecognitionApi) {
+      setVoiceSupported(false);
+      setComposerNotice("Voice input is not supported in this browser.");
+      return;
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setComposerNotice("Voice input is not supported in this browser.");
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((track) => track.stop());
+    } catch {
+      setMicPermissionDenied(true);
+      setComposerNotice("Microphone permission was denied.");
+      return;
+    }
+
+    setMicPermissionDenied(false);
+    setComposerNotice("Listening…");
+    voiceBaseValueRef.current = inputValue.trim();
+
+    const recognition = new SpeechRecognitionApi();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+
+    recognition.onresult = (event) => {
+      let transcript = "";
+
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        transcript += event.results[index][0].transcript;
+      }
+
+      const prefix = voiceBaseValueRef.current.trim();
+      onInputChange([prefix, transcript.trim()].filter(Boolean).join(prefix ? " " : ""));
+    };
+
+    recognition.onerror = (event) => {
+      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+        setMicPermissionDenied(true);
+        setComposerNotice("Microphone permission was denied.");
+      } else {
+        setComposerNotice("Voice input could not be completed.");
+      }
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsListening(true);
+  };
+
+  const toggleVoiceInput = async () => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setComposerNotice(null);
+      return;
+    }
+
+    await startVoiceInput();
+  };
+
   return (
     <div className="mx-auto w-full max-w-[960px]">
       <div
-        className="relative overflow-hidden rounded-[22px] bg-[image:var(--start-composer-shell)] p-px shadow-[var(--start-composer-shadow)] dark:rounded-[24px] dark:bg-[linear-gradient(90deg,rgba(10,218,238,0.58)_0%,rgba(46,38,93,0.22)_44%,rgba(124,58,237,0.62)_100%)] dark:p-px dark:shadow-[0_0_0_1px_rgba(34,211,238,0.08),0_0_22px_rgba(34,211,238,0.08),0_0_36px_rgba(139,92,246,0.14)] dark:backdrop-blur-[12px]"
+        className="group/composer relative overflow-hidden rounded-[22px] bg-[image:var(--start-composer-shell)] p-px shadow-[var(--start-composer-shadow)] transition-[box-shadow,transform] duration-200 hover:shadow-[-18px_18px_38px_-32px_rgba(117,228,238,0.58),22px_20px_40px_-32px_rgba(186,146,255,0.5),0_22px_34px_-34px_rgba(107,116,148,0.2)] dark:rounded-[24px] dark:bg-[linear-gradient(90deg,rgba(10,218,238,0.58)_0%,rgba(46,38,93,0.22)_44%,rgba(124,58,237,0.62)_100%)] dark:p-px dark:shadow-[0_0_0_1px_rgba(34,211,238,0.08),0_0_22px_rgba(34,211,238,0.08),0_0_36px_rgba(139,92,246,0.14)] dark:hover:shadow-[0_0_0_1px_rgba(34,211,238,0.12),0_0_28px_rgba(34,211,238,0.14),0_0_44px_rgba(139,92,246,0.18)] dark:backdrop-blur-[12px]"
       >
         <div
           aria-hidden
@@ -288,47 +565,186 @@ function PromptComposer({
               "linear-gradient(180deg, rgba(203,174,255,0.24) 0%, rgba(183,137,255,0.42) 42%, rgba(193,152,255,0.24) 72%, rgba(255,255,255,0) 100%)",
           }}
         />
-        <div className="relative min-h-[168px] rounded-t-[21px] border border-white/88 border-b-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.994)_0%,rgba(253,253,255,0.982)_100%)] px-[21px] pb-[56px] pt-[20px] dark:rounded-t-[23px] dark:border dark:border-white/[0.03] dark:border-b-0 dark:bg-[linear-gradient(180deg,rgba(23,22,30,0.992)_0%,rgba(26,24,36,0.988)_100%)] md:px-5 md:pb-[58px] md:pt-[18px]">
-          <button
-            type="button"
-            aria-label="Prompt settings"
-            className="absolute right-[22px] top-[18px] text-[var(--start-composer-icon)] transition-colors hover:text-[#11131a] dark:text-white/[0.82] dark:hover:text-white"
+        <div
+          className={cn(
+            "relative rounded-t-[21px] border border-white/88 border-b-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.994)_0%,rgba(253,253,255,0.982)_100%)] px-[21px] transition-[min-height,padding] duration-200 dark:rounded-t-[23px] dark:border dark:border-white/[0.03] dark:border-b-0 dark:bg-[linear-gradient(180deg,rgba(23,22,30,0.992)_0%,rgba(26,24,36,0.988)_100%)] md:px-5",
+            isComposerCompact ? "min-h-[84px] pb-[16px] pt-[16px]" : "min-h-[168px] pb-[56px] pt-[20px] md:pb-[58px] md:pt-[18px]"
+          )}
+        >
+          <ComposerActionButton
+            icon={isComposerCompact ? Maximize2 : Minimize2}
+            tooltip="Resize composer"
+            onClick={() => {
+              setIsComposerCompact((current) => !current);
+              setIsUploadMenuOpen(false);
+              setIsDepthMenuOpen(false);
+              focusComposer();
+            }}
+            className="absolute right-[18px] top-[14px] h-[34px] w-[34px] border-transparent bg-transparent shadow-none hover:bg-white/70 dark:hover:bg-white/[0.05]"
+          />
+
+          <textarea
+            ref={textareaRef}
+            value={inputValue}
+            onChange={(event) => {
+              onInputChange(event.target.value);
+              setComposerNotice(null);
+            }}
+            onFocus={() => setComposerNotice(null)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                handleSubmit();
+              }
+            }}
+            placeholder={COMPOSER_PLACEHOLDER}
+            rows={1}
+            className={cn(
+              "w-full resize-none overflow-y-auto bg-transparent pr-14 text-[15px] leading-6 text-[#1f2330] outline-none placeholder:text-[var(--start-composer-placeholder)] dark:text-white/[0.92]",
+              isComposerCompact ? "min-h-[28px]" : "min-h-[84px]"
+            )}
+          />
+
+          <div
+            className={cn(
+              "absolute bottom-[16px] left-[15px] transition-all duration-200",
+              isComposerCompact ? "pointer-events-none translate-y-2 opacity-0" : "opacity-100"
+            )}
           >
-            <SlidersHorizontal className="h-[17px] w-[17px]" strokeWidth={1.9} />
-          </button>
+            <div ref={uploadTriggerRef} className="relative">
+              <ComposerActionButton
+                icon={Plus}
+                tooltip="Attach file"
+                onClick={() => {
+                  setIsUploadMenuOpen((current) => !current);
+                  setIsDepthMenuOpen(false);
+                }}
+                className="shadow-none hover:bg-white dark:border-white/[0.12] dark:bg-white/[0.035] dark:text-white/[0.82] dark:hover:bg-white/[0.06]"
+              />
+              {isUploadMenuOpen ? (
+                <div
+                  ref={uploadMenuRef}
+                  className="absolute bottom-[calc(100%+12px)] left-0 z-30 w-[184px] rounded-[18px] border border-[var(--start-border-soft)] bg-[var(--start-surface-strong)] p-2 shadow-[0_18px_40px_-26px_rgba(15,23,42,0.28)] dark:border-white/[0.08] dark:bg-[rgba(20,19,28,0.98)]"
+                >
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex w-full items-center gap-3 rounded-[14px] px-3 py-2.5 text-left text-[14px] font-medium text-[var(--start-title)] transition-colors hover:bg-white dark:text-white/[0.9] dark:hover:bg-white/[0.04]"
+                  >
+                    <Upload className="h-4 w-4" strokeWidth={1.9} />
+                    Upload file
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </div>
 
-          <p className="max-w-[560px] text-[14px] font-medium tracking-[-0.01em] text-[var(--start-composer-placeholder)] dark:text-white/[0.42]">
-            {promptText}
-          </p>
-
-          <button
-            type="button"
-            aria-label="Add attachment"
-            className="absolute bottom-[16px] left-[15px] flex h-[40px] w-[40px] items-center justify-center rounded-full border border-[color:var(--start-control-border)] bg-[var(--start-control-bg)] text-[var(--start-control-text)] shadow-none transition-all hover:bg-white dark:border-white/[0.12] dark:bg-white/[0.035] dark:text-white/[0.82] dark:hover:bg-white/[0.06] dark:hover:shadow-[0_0_10px_rgba(34,211,238,0.12)] md:left-[15px]"
+          <div
+            className={cn(
+              "absolute bottom-[15px] right-[15px] flex items-center gap-2.5 transition-all duration-200 md:right-[16px]",
+              isComposerCompact ? "pointer-events-none translate-y-2 opacity-0" : "opacity-100"
+            )}
           >
-            <Plus className="h-[18px] w-[18px]" strokeWidth={1.9} />
-          </button>
+            <div ref={depthTriggerRef} className="relative">
+              <ComposerActionButton
+                icon={SlidersHorizontal}
+                tooltip={`Response depth: ${complexityLevel}`}
+                onClick={() => {
+                  setIsDepthMenuOpen((current) => !current);
+                  setIsUploadMenuOpen(false);
+                }}
+                badge={complexityLevel.charAt(0)}
+                className="shadow-none"
+              />
+              {isDepthMenuOpen ? (
+                <div
+                  ref={depthMenuRef}
+                  className="absolute bottom-[calc(100%+12px)] right-0 z-30 w-[180px] rounded-[18px] border border-[var(--start-border-soft)] bg-[var(--start-surface-strong)] p-2 shadow-[0_18px_40px_-26px_rgba(15,23,42,0.28)] dark:border-white/[0.08] dark:bg-[rgba(20,19,28,0.98)]"
+                >
+                  {COMPLEXITY_LEVELS.map((level) => (
+                    <button
+                      key={level}
+                      type="button"
+                      onClick={() => {
+                        setComplexityLevel(level);
+                        setIsDepthMenuOpen(false);
+                        focusComposer();
+                      }}
+                      className={cn(
+                        "flex w-full items-center justify-between rounded-[14px] px-3 py-2 text-left text-[14px] font-medium transition-colors",
+                        level === complexityLevel
+                          ? "bg-white text-[var(--start-title)] dark:bg-white/[0.06] dark:text-white"
+                          : "text-[var(--start-title)] hover:bg-white dark:text-white/[0.86] dark:hover:bg-white/[0.04]"
+                      )}
+                    >
+                      <span>{level}</span>
+                      {level === complexityLevel ? <Check className="h-4 w-4" strokeWidth={2} /> : null}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
 
-          <div className="absolute bottom-[15px] right-[15px] flex items-center gap-2.5 md:right-[16px]">
-            <ComposerControl icon={Settings} />
-            <ComposerControl icon={Mic} />
-            <ComposerControl icon={SendHorizontal} prominent />
+            <ComposerActionButton
+              icon={Mic}
+              tooltip="Chat using voice"
+              onClick={() => {
+                void toggleVoiceInput();
+              }}
+              active={isListening}
+              className={cn(isListening ? "animate-pulse" : "")}
+            />
+            <ComposerActionButton
+              icon={SendHorizontal}
+              tooltip="Send message"
+              onClick={handleSubmit}
+              prominent
+              disabled={!inputValue.trim()}
+            />
           </div>
         </div>
 
-        <div className="border-t border-[color:var(--start-chip-row-border)] bg-[image:var(--start-chip-row-bg)] px-3 py-[8px] md:px-[12px] dark:border-t-white/[0.05] dark:bg-[linear-gradient(90deg,rgba(25,23,40,0.985)_0%,rgba(31,28,52,0.985)_100%)]">
+        <div
+          className={cn(
+            "overflow-hidden border-t border-[color:var(--start-chip-row-border)] bg-[image:var(--start-chip-row-bg)] px-3 transition-[max-height,opacity,padding] duration-200 md:px-[12px] dark:border-t-white/[0.05] dark:bg-[linear-gradient(90deg,rgba(25,23,40,0.985)_0%,rgba(31,28,52,0.985)_100%)]",
+            isComposerCompact ? "max-h-0 py-0 opacity-0" : "max-h-[80px] py-[8px] opacity-100"
+          )}
+        >
           <div className="flex flex-wrap items-center gap-2">
             {promptChips.map((chip) => (
               <PromptChip
                 key={chip.label}
                 label={chip.label}
                 icon={chip.icon}
-                onClick={() => onPromptSelect(chip.prompt)}
+                onClick={() => handlePromptPrefill(chip.prompt)}
               />
             ))}
           </div>
         </div>
       </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="sr-only"
+        onChange={handleFileSelection}
+      />
+
+      {selectedFile || composerNotice || micPermissionDenied || !voiceSupported ? (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-1 text-[12px] font-medium text-[var(--start-helper)] dark:text-white/[0.52]">
+          <span>
+            {selectedFile ? `Attached: ${selectedFile.name}` : "\u00A0"}
+          </span>
+          <span>
+            {composerNotice ??
+              (!voiceSupported
+                ? "Voice input is unavailable in this browser."
+                : micPermissionDenied
+                  ? "Microphone access was denied."
+                  : "")}
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -409,12 +825,8 @@ function SuggestionIllustration({
   );
 }
 
-function getPromptFallback() {
-  return "Ask anything about incidents, suppliers, orders, reconciliations, or system health...";
-}
-
 export function StartPage({ userFirstName }: { userFirstName?: string | null }) {
-  const [promptText, setPromptText] = useState(getPromptFallback);
+  const [inputValue, setInputValue] = useState("");
   const welcomeTitle = userFirstName ? `Welcome back, ${userFirstName}` : "Welcome back";
 
   return (
@@ -473,7 +885,11 @@ export function StartPage({ userFirstName }: { userFirstName?: string | null }) 
             </div>
 
             <div className="mt-[22px] md:mt-[24px]">
-              <PromptComposer promptText={promptText} onPromptSelect={setPromptText} />
+              <PromptComposer
+                inputValue={inputValue}
+                onInputChange={setInputValue}
+                onPromptSelect={setInputValue}
+              />
             </div>
           </div>
         </section>
@@ -498,7 +914,7 @@ export function StartPage({ userFirstName }: { userFirstName?: string | null }) 
               <FeatureCard
                 key={card.eyebrow}
                 {...card}
-                onSelect={() => setPromptText(card.title)}
+                onSelect={() => setInputValue(card.title)}
               />
             ))}
           </div>
