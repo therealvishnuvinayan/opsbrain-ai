@@ -6,11 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Bot, ChevronRight, X } from "lucide-react";
 
 import { Sidebar } from "@/components/app-shell/sidebar";
-import {
-  dashboardNavItem,
-  navGroups,
-  standaloneNavItems,
-} from "@/components/app-shell/sidebar-nav";
+import { dashboardNavItem } from "@/components/app-shell/sidebar-nav";
 import type { SidebarNavItem } from "@/components/app-shell/sidebar-nav";
 import { Topbar } from "@/components/app-shell/topbar";
 import { Button } from "@/components/ui/button";
@@ -18,6 +14,7 @@ import { cn } from "@/lib/utils";
 
 interface AppShellLayoutProps {
   children: React.ReactNode;
+  variant?: "default" | "canva";
 }
 
 function isActivePath(pathname: string, href: string) {
@@ -58,7 +55,7 @@ function MobileNavItem({ item, pathname, onSelect, nested = false }: MobileNavIt
   );
 }
 
-export function AppShellLayout({ children }: AppShellLayoutProps) {
+export function AppShellLayout({ children, variant = "default" }: AppShellLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
@@ -67,14 +64,7 @@ export function AppShellLayout({ children }: AppShellLayoutProps) {
   const toggleSidebar = () => setCollapsed((prev) => !prev);
 
   const prefetchRoutes = useMemo(
-    () =>
-      Array.from(
-        new Set([
-          dashboardNavItem.href,
-          ...navGroups.flatMap((group) => group.items.map((item) => item.href)),
-          ...standaloneNavItems.map((item) => item.href),
-        ])
-      ),
+    () => [dashboardNavItem.href],
     []
   );
 
@@ -121,13 +111,26 @@ export function AppShellLayout({ children }: AppShellLayoutProps) {
   }, [mobileOpen]);
 
   return (
-    <div className="relative min-h-screen">
+    <div
+      className={cn(
+        "relative min-h-screen",
+        variant === "canva" &&
+          "h-screen overflow-hidden p-2 md:p-3"
+      )}
+    >
+      {variant === "default" ? (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-soft-grid [background-size:32px_32px] opacity-40 dark:opacity-[0.08]"
+        />
+      ) : null}
       <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-soft-grid [background-size:32px_32px] opacity-40"
-      />
-      <div className="relative flex min-h-screen">
-        <Sidebar collapsed={collapsed} onToggle={toggleSidebar} />
+        className={cn(
+          "relative flex min-h-screen",
+          variant === "canva" && "h-full min-h-0 gap-2 md:gap-3"
+        )}
+      >
+        <Sidebar collapsed={collapsed} onToggle={toggleSidebar} variant={variant} />
         {mobileOpen ? (
           <div className="fixed inset-0 z-50 md:hidden">
             <button
@@ -144,7 +147,7 @@ export function AppShellLayout({ children }: AppShellLayoutProps) {
                   </div>
                   <div className="truncate">
                     <p className="truncate text-sm font-semibold">OpsBrain AI</p>
-                    <p className="text-xs text-muted-foreground">Command Center</p>
+                    <p className="text-xs text-muted-foreground">Home</p>
                   </div>
                 </div>
                 <Button
@@ -164,42 +167,28 @@ export function AppShellLayout({ children }: AppShellLayoutProps) {
                   pathname={pathname}
                   onSelect={() => setMobileOpen(false)}
                 />
-
-                {navGroups.map((group) => (
-                  <section key={group.key} className="space-y-1">
-                    <p className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      {group.label}
-                    </p>
-                    <div className="space-y-1">
-                      {group.items.map((item) => (
-                        <MobileNavItem
-                          key={item.href}
-                          item={item}
-                          pathname={pathname}
-                          onSelect={() => setMobileOpen(false)}
-                          nested
-                        />
-                      ))}
-                    </div>
-                  </section>
-                ))}
-
-                <div className="my-1 border-t border-white/10" />
-                {standaloneNavItems.map((item) => (
-                  <MobileNavItem
-                    key={item.href}
-                    item={item}
-                    pathname={pathname}
-                    onSelect={() => setMobileOpen(false)}
-                  />
-                ))}
               </nav>
             </aside>
           </div>
         ) : null}
-        <div className="flex min-w-0 flex-1 flex-col">
-          <Topbar />
-          <main className="flex-1 px-4 pb-8 pt-6 md:px-8">{children}</main>
+        <div
+          className={cn(
+            "flex min-w-0 flex-1 flex-col",
+            variant === "canva" &&
+              "min-h-0 overflow-hidden bg-transparent dark:rounded-[28px] dark:border dark:border-white/6 dark:bg-[linear-gradient(180deg,#0d101b_0%,#0b0f1a_100%)]"
+          )}
+        >
+          {variant === "default" ? <Topbar /> : null}
+          <main
+            className={cn(
+              "flex-1",
+              variant === "canva"
+                ? "min-h-0 overflow-y-auto px-0 pb-8 pt-0 md:px-0 md:pb-10 md:pt-0"
+                : "px-4 pb-8 pt-6 md:px-8"
+            )}
+          >
+            {children}
+          </main>
         </div>
       </div>
     </div>

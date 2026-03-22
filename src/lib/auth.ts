@@ -3,7 +3,7 @@ import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 
-import { isGoogleOAuthConfigured } from "@/lib/env";
+import { isGoogleOAuthConfigured, usePrismaAuthAdapter } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/password";
 
@@ -63,7 +63,6 @@ if (isGoogleOAuthConfigured) {
 }
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma),
   session: {
     strategy: "jwt",
   },
@@ -90,3 +89,7 @@ export const authOptions: NextAuthOptions = {
     },
   },
 };
+
+if (usePrismaAuthAdapter) {
+  authOptions.adapter = PrismaAdapter(prisma);
+}

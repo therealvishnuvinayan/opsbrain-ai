@@ -50,6 +50,10 @@ interface BackendAskResponse {
   citations: Array<{ source_id: string; chunk_id: string; snippet: string }>;
 }
 
+interface BackendAudioTranscriptionResponse {
+  text: string;
+}
+
 const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
 ).replace(/\/$/, "");
@@ -225,6 +229,47 @@ export async function askOpsBrain(question: string): Promise<AIResponse> {
       "What should be escalated first?",
     ],
   };
+}
+
+export async function transcribeOpsBrainAudio(audioBlob: Blob, fileName = "opsbrain-voice.webm") {
+  if (!isApiConfigured()) {
+    throw new Error("NEXT_PUBLIC_API_BASE_URL is not configured");
+  }
+
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 30000);
+  const formData = new FormData();
+  formData.append("file", audioBlob, fileName);
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/audio/transcribe`, {
+      method: "POST",
+      body: formData,
+      cache: "no-store",
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      let message = "Audio transcription failed.";
+      try {
+        const payload = (await response.json()) as { detail?: string };
+        if (payload.detail) {
+          message = payload.detail;
+        }
+      } catch {
+        const text = await response.text();
+        if (text.trim()) {
+          message = text;
+        }
+      }
+      throw new Error(message);
+    }
+
+    const payload = (await response.json()) as BackendAudioTranscriptionResponse;
+    return payload.text;
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 export function canUseBackendApi() {
