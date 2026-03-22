@@ -19,10 +19,9 @@ const themeInitScript = `
 
   try {
     const savedTheme = localStorage.getItem(storageKey);
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     const theme = savedTheme === "light" || savedTheme === "dark"
       ? savedTheme
-      : (prefersDark ? "dark" : "light");
+      : "light";
 
     root.classList.toggle("dark", theme === "dark");
     root.style.colorScheme = theme;

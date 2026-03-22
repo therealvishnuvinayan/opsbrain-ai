@@ -13,7 +13,7 @@ export function getInitialTheme(): AppTheme {
     return savedTheme;
   }
 
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  return "light";
 }
 
 export function applyTheme(theme: AppTheme) {
