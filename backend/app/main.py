@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import (
+    audio_router,
     ask_router,
     health_router,
     knowledge_router,
@@ -39,5 +40,6 @@ app.add_middleware(
 app.include_router(health_router, prefix=settings.api_prefix)
 app.include_router(operations_router, prefix=settings.api_prefix)
 app.include_router(knowledge_router, prefix=settings.api_prefix)
+app.include_router(audio_router, prefix=settings.api_prefix)
 app.include_router(ask_router, prefix=settings.api_prefix)
 app.include_router(zendesk_autopilot_router, prefix=settings.api_prefix)

@@ -57,7 +57,7 @@ export function Topbar() {
   const pathname = usePathname();
   const { data: session } = useSession();
 
-  const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [theme, setTheme] = useState<"light" | "dark">("light");
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [avatarImageFailed, setAvatarImageFailed] = useState(false);
 

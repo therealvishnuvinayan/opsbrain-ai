@@ -115,7 +115,7 @@ function CanvaRailItem({
 export function Sidebar({ collapsed, onToggle, variant = "default" }: SidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const [theme, setTheme] = useState<AppTheme>("dark");
+  const [theme, setTheme] = useState<AppTheme>("light");
   const prefetchedRef = useRef<Set<string>>(new Set());
 
   const prefetchHref = (href: string) => {

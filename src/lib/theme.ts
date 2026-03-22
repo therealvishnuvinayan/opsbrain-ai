@@ -4,7 +4,7 @@ export const THEME_STORAGE_KEY = "opsbrain-theme";
 
 export function getInitialTheme(): AppTheme {
   if (typeof window === "undefined") {
-    return "dark";
+    return "light";
   }
 
   const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY) as AppTheme | null;

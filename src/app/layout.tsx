@@ -27,8 +27,8 @@ const themeInitScript = `
     root.classList.toggle("dark", theme === "dark");
     root.style.colorScheme = theme;
   } catch {
-    root.classList.add("dark");
-    root.style.colorScheme = "dark";
+    root.classList.remove("dark");
+    root.style.colorScheme = "light";
   }
 })();
 `;
@@ -49,7 +49,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} font-sans antialiased`}>
         <Script id="opsbrain-theme-init" strategy="beforeInteractive">
           {themeInitScript}

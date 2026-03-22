@@ -1,11 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { ChangeEvent, CSSProperties, ReactNode } from "react";
+import type { ChangeEvent, CSSProperties, Dispatch, ReactNode, SetStateAction } from "react";
 import { DM_Sans } from "next/font/google";
+import { createPortal } from "react-dom";
 import {
   Activity,
   Check,
+  File,
+  FileImage,
+  FileSpreadsheet,
+  FileText,
   Folder,
   LayoutTemplate,
   Maximize2,
@@ -21,8 +26,10 @@ import {
   Truck,
   TriangleAlert,
   Upload,
+  X,
 } from "lucide-react";
 
+import { transcribeOpsBrainAudio } from "@/features/operations/api";
 import { cn } from "@/lib/utils";
 
 const dmSans = DM_Sans({
@@ -88,51 +95,19 @@ const COMPLEXITY_LEVELS = ["Low", "Medium", "High", "Deep"] as const;
 
 type ComplexityLevel = (typeof COMPLEXITY_LEVELS)[number];
 
-interface SpeechRecognitionAlternative {
-  transcript: string;
-}
-
-interface SpeechRecognitionResult {
-  0: SpeechRecognitionAlternative;
-  isFinal: boolean;
-  length: number;
-}
-
-interface SpeechRecognitionResultList {
-  [index: number]: SpeechRecognitionResult;
-  length: number;
-}
-
-interface SpeechRecognitionEvent extends Event {
-  resultIndex: number;
-  results: SpeechRecognitionResultList;
-}
-
-interface SpeechRecognitionErrorEvent extends Event {
-  error: string;
-}
-
-interface SpeechRecognitionInstance extends EventTarget {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  onresult: ((event: SpeechRecognitionEvent) => void) | null;
-  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
-  onend: (() => void) | null;
-  start(): void;
-  stop(): void;
-  abort(): void;
-}
-
-interface SpeechRecognitionConstructor {
-  new (): SpeechRecognitionInstance;
-}
-
-declare global {
-  interface Window {
-    SpeechRecognition?: SpeechRecognitionConstructor;
-    webkitSpeechRecognition?: SpeechRecognitionConstructor;
+function getPreferredRecordingMimeType() {
+  if (typeof MediaRecorder === "undefined") {
+    return "";
   }
+
+  const mimeTypes = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/mp4",
+    "audio/ogg;codecs=opus",
+  ];
+
+  return mimeTypes.find((mimeType) => MediaRecorder.isTypeSupported(mimeType)) ?? "";
 }
 
 const categoryPills = [
@@ -296,21 +271,29 @@ function PromptChip({
 function ComposerActionButton({
   icon: Icon,
   tooltip,
+  tooltipId,
+  activeTooltip,
+  onTooltipChange,
   onClick,
   active = false,
   disabled = false,
   prominent = false,
   badge,
   className,
+  tooltipClassName,
 }: {
   icon: typeof Plus;
   tooltip: string;
+  tooltipId: string;
+  activeTooltip: string | null;
+  onTooltipChange: Dispatch<SetStateAction<string | null>>;
   onClick?: () => void;
   active?: boolean;
   disabled?: boolean;
   prominent?: boolean;
   badge?: string;
   className?: string;
+  tooltipClassName?: string;
 }) {
   return (
     <div className="group/tooltip relative">
@@ -319,6 +302,10 @@ function ComposerActionButton({
         aria-label={tooltip}
         disabled={disabled}
         onClick={onClick}
+        onMouseEnter={() => onTooltipChange(tooltipId)}
+        onMouseLeave={() => onTooltipChange((current) => (current === tooltipId ? null : current) as never)}
+        onFocus={() => onTooltipChange(tooltipId)}
+        onBlur={() => onTooltipChange((current) => (current === tooltipId ? null : current) as never)}
         className={cn(
           "flex h-[40px] w-[40px] items-center justify-center rounded-full border transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(104,108,255,0.32)] disabled:cursor-not-allowed disabled:opacity-45",
           prominent
@@ -336,12 +323,65 @@ function ComposerActionButton({
           </span>
         ) : null}
       </button>
-      <span className="pointer-events-none absolute left-1/2 top-[calc(100%+8px)] z-30 -translate-x-1/2 rounded-[10px] bg-[#1f2330] px-2.5 py-1 text-[11px] font-medium text-white opacity-0 shadow-[0_10px_24px_-16px_rgba(15,23,42,0.45)] transition-opacity duration-150 group-hover/tooltip:opacity-100 group-focus-within/tooltip:opacity-100 dark:bg-white dark:text-[#171923]">
+      <span
+        className={cn(
+          "pointer-events-none absolute left-1/2 top-[calc(100%+8px)] z-30 w-max whitespace-nowrap -translate-x-1/2 rounded-[10px] bg-[#1f2330] px-3 py-1.5 text-[11.5px] font-medium tracking-[-0.01em] text-white shadow-[0_10px_24px_-16px_rgba(15,23,42,0.45)] transition-opacity duration-150 dark:bg-white dark:text-[#171923]",
+          activeTooltip === tooltipId ? "opacity-100" : "opacity-0",
+          tooltipClassName
+        )}
+      >
         {tooltip}
       </span>
     </div>
   );
 }
+
+function getFileMeta(file: File) {
+  const lowerName = file.name.toLowerCase();
+
+  if (file.type.startsWith("image/")) {
+    return { kind: "image" as const, icon: FileImage, accent: "text-[#2563eb] dark:text-[#93c5fd]" };
+  }
+
+  if (file.type === "application/pdf" || lowerName.endsWith(".pdf")) {
+    return { kind: "pdf" as const, icon: FileText, accent: "text-[#dc2626] dark:text-[#fca5a5]" };
+  }
+
+  if (
+    file.type.includes("word") ||
+    lowerName.endsWith(".doc") ||
+    lowerName.endsWith(".docx")
+  ) {
+    return { kind: "doc" as const, icon: FileText, accent: "text-[#2563eb] dark:text-[#93c5fd]" };
+  }
+
+  if (
+    file.type.includes("sheet") ||
+    file.type.includes("csv") ||
+    lowerName.endsWith(".csv") ||
+    lowerName.endsWith(".xlsx") ||
+    lowerName.endsWith(".xls")
+  ) {
+    return {
+      kind: "sheet" as const,
+      icon: FileSpreadsheet,
+      accent: "text-[#16a34a] dark:text-[#86efac]",
+    };
+  }
+
+  return { kind: "file" as const, icon: File, accent: "text-[#6b7280] dark:text-white/[0.68]" };
+}
+
+type AttachedFile = {
+  id: string;
+  file: File;
+  previewUrl: string | null;
+};
+
+type FloatingPosition = {
+  top: number;
+  left: number;
+};
 
 function PromptComposer({
   inputValue,
@@ -353,29 +393,57 @@ function PromptComposer({
   onPromptSelect: (value: string) => void;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const uploadMenuRef = useRef<HTMLDivElement | null>(null);
   const depthMenuRef = useRef<HTMLDivElement | null>(null);
-  const uploadTriggerRef = useRef<HTMLDivElement | null>(null);
   const depthTriggerRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
-  const voiceBaseValueRef = useRef("");
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const attachedFilesRef = useRef<AttachedFile[]>([]);
+  const inputValueRef = useRef(inputValue);
   const [isComposerCompact, setIsComposerCompact] = useState(false);
-  const [isUploadMenuOpen, setIsUploadMenuOpen] = useState(false);
   const [isDepthMenuOpen, setIsDepthMenuOpen] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [isListening, setIsListening] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [listeningDotsStep, setListeningDotsStep] = useState(0);
   const [voiceSupported, setVoiceSupported] = useState(true);
   const [micPermissionDenied, setMicPermissionDenied] = useState(false);
   const [complexityLevel, setComplexityLevel] = useState<ComplexityLevel>("Medium");
   const [composerNotice, setComposerNotice] = useState<string | null>(null);
+  const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
+  const [depthMenuPosition, setDepthMenuPosition] = useState<FloatingPosition | null>(null);
 
   useEffect(() => {
     setVoiceSupported(
       typeof window !== "undefined" &&
-        Boolean(window.SpeechRecognition || window.webkitSpeechRecognition)
+        typeof MediaRecorder !== "undefined" &&
+        Boolean(navigator.mediaDevices?.getUserMedia)
     );
   }, []);
+
+  useEffect(() => {
+    inputValueRef.current = inputValue;
+  }, [inputValue]);
+
+  useEffect(() => {
+    attachedFilesRef.current = attachedFiles;
+  }, [attachedFiles]);
+
+  useEffect(() => {
+    if (!isListening) {
+      setListeningDotsStep(0);
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setListeningDotsStep((current) => (current + 1) % 3);
+    }, 420);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [isListening]);
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -393,15 +461,6 @@ function PromptComposer({
       const target = event.target as Node;
 
       if (
-        uploadMenuRef.current &&
-        !uploadMenuRef.current.contains(target) &&
-        uploadTriggerRef.current &&
-        !uploadTriggerRef.current.contains(target)
-      ) {
-        setIsUploadMenuOpen(false);
-      }
-
-      if (
         depthMenuRef.current &&
         !depthMenuRef.current.contains(target) &&
         depthTriggerRef.current &&
@@ -413,8 +472,8 @@ function PromptComposer({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setIsUploadMenuOpen(false);
         setIsDepthMenuOpen(false);
+        setActiveTooltip(null);
       }
     };
 
@@ -428,8 +487,52 @@ function PromptComposer({
   }, []);
 
   useEffect(() => {
+    if (!isDepthMenuOpen || typeof window === "undefined") {
+      return;
+    }
+
+    const updateDepthMenuPosition = () => {
+      const trigger = depthTriggerRef.current;
+      if (!trigger) {
+        return;
+      }
+
+      const rect = trigger.getBoundingClientRect();
+      const menuWidth = 208;
+      const viewportPadding = 12;
+      const nextLeft = Math.min(
+        Math.max(rect.right - menuWidth - 8, viewportPadding),
+        window.innerWidth - menuWidth - viewportPadding
+      );
+
+      setDepthMenuPosition({
+        top: rect.top - 12,
+        left: nextLeft,
+      });
+    };
+
+    updateDepthMenuPosition();
+    window.addEventListener("resize", updateDepthMenuPosition);
+    window.addEventListener("scroll", updateDepthMenuPosition, true);
+
     return () => {
-      recognitionRef.current?.abort();
+      window.removeEventListener("resize", updateDepthMenuPosition);
+      window.removeEventListener("scroll", updateDepthMenuPosition, true);
+    };
+  }, [isDepthMenuOpen]);
+
+  useEffect(() => {
+    return () => {
+      const recorder = mediaRecorderRef.current;
+      if (recorder && recorder.state !== "inactive") {
+        recorder.stop();
+      }
+      mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+      attachedFilesRef.current.forEach((item) => {
+        if (item.previewUrl) {
+          URL.revokeObjectURL(item.previewUrl);
+        }
+      });
     };
   }, []);
 
@@ -455,94 +558,150 @@ function PromptComposer({
     console.info("OpsBrain homepage composer submit", {
       prompt: trimmedValue,
       complexityLevel,
-      fileName: selectedFile?.name ?? null,
+      fileNames: attachedFiles.map((item) => item.file.name),
     });
     setComposerNotice("Prompt captured locally. Chat execution is not connected yet.");
   };
 
   const handleFileSelection = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0] ?? null;
-    setSelectedFile(file);
+    const nextFiles = Array.from(event.target.files ?? []);
+    if (nextFiles.length === 0) {
+      return;
+    }
+
+    setAttachedFiles((current) => [
+      ...current,
+      ...nextFiles.map((file) => ({
+        id: `${file.name}-${file.size}-${file.lastModified}-${crypto.randomUUID()}`,
+        file,
+        previewUrl: file.type.startsWith("image/") ? URL.createObjectURL(file) : null,
+      })),
+    ]);
     setComposerNotice(null);
-    setIsUploadMenuOpen(false);
     event.target.value = "";
     focusComposer();
   };
 
+  const handleRemoveAttachment = (attachmentId: string) => {
+    setAttachedFiles((current) => {
+      const nextFiles = current.filter((item) => item.id !== attachmentId);
+      const removedFile = current.find((item) => item.id === attachmentId);
+      if (removedFile?.previewUrl) {
+        URL.revokeObjectURL(removedFile.previewUrl);
+      }
+      return nextFiles;
+    });
+  };
+
   const startVoiceInput = async () => {
-    const SpeechRecognitionApi =
-      typeof window !== "undefined"
-        ? window.SpeechRecognition || window.webkitSpeechRecognition
-        : undefined;
-
-    if (!SpeechRecognitionApi) {
+    if (typeof MediaRecorder === "undefined" || !navigator.mediaDevices?.getUserMedia) {
       setVoiceSupported(false);
-      setComposerNotice("Voice input is not supported in this browser.");
-      return;
-    }
-
-    if (!navigator.mediaDevices?.getUserMedia) {
       setComposerNotice("Voice input is not supported in this browser.");
       return;
     }
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach((track) => track.stop());
-    } catch {
-      setMicPermissionDenied(true);
-      setComposerNotice("Microphone permission was denied.");
-      return;
-    }
+      const mimeType = getPreferredRecordingMimeType();
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
 
-    setMicPermissionDenied(false);
-    setComposerNotice("Listening…");
-    voiceBaseValueRef.current = inputValue.trim();
+      mediaStreamRef.current = stream;
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
 
-    const recognition = new SpeechRecognitionApi();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = "en-US";
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
 
-    recognition.onresult = (event) => {
-      let transcript = "";
+      recorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, {
+          type: recorder.mimeType || "audio/webm",
+        });
 
-      for (let index = event.resultIndex; index < event.results.length; index += 1) {
-        transcript += event.results[index][0].transcript;
-      }
+        mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+        mediaStreamRef.current = null;
+        mediaRecorderRef.current = null;
+        audioChunksRef.current = [];
+        setIsListening(false);
 
-      const prefix = voiceBaseValueRef.current.trim();
-      onInputChange([prefix, transcript.trim()].filter(Boolean).join(prefix ? " " : ""));
-    };
+        if (!audioBlob.size) {
+          setComposerNotice("No audio was captured.");
+          return;
+        }
 
-    recognition.onerror = (event) => {
-      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+        setIsTranscribing(true);
+        setComposerNotice("Transcribing speech…");
+
+        try {
+          const transcript = await transcribeOpsBrainAudio(
+            audioBlob,
+            recorder.mimeType.includes("ogg") ? "opsbrain-voice.ogg" : "opsbrain-voice.webm"
+          );
+          const prefix = inputValueRef.current.trim();
+          onInputChange([prefix, transcript.trim()].filter(Boolean).join(prefix ? " " : ""));
+          setComposerNotice("Voice input added to the composer.");
+          focusComposer();
+        } catch (error) {
+          setComposerNotice(
+            error instanceof Error ? error.message : "Voice input could not be completed."
+          );
+        } finally {
+          setIsTranscribing(false);
+        }
+      };
+
+      recorder.start();
+      setMicPermissionDenied(false);
+      setComposerNotice("Listening… click the mic again to stop.");
+      setIsListening(true);
+    } catch (error) {
+      const errorName = error instanceof DOMException ? error.name : "";
+      if (errorName === "NotAllowedError" || errorName === "SecurityError") {
         setMicPermissionDenied(true);
         setComposerNotice("Microphone permission was denied.");
+      } else if (errorName === "NotFoundError" || errorName === "DevicesNotFoundError") {
+        setComposerNotice("No microphone was found on this device.");
       } else {
-        setComposerNotice("Voice input could not be completed.");
+        setComposerNotice("Voice input could not be started.");
       }
-      setIsListening(false);
-    };
-
-    recognition.onend = () => {
-      setIsListening(false);
-    };
-
-    recognitionRef.current = recognition;
-    recognition.start();
-    setIsListening(true);
+      return;
+    }
   };
 
   const toggleVoiceInput = async () => {
     if (isListening) {
-      recognitionRef.current?.stop();
-      setComposerNotice(null);
+      const recorder = mediaRecorderRef.current;
+      if (recorder && recorder.state !== "inactive") {
+        recorder.stop();
+      }
+      setComposerNotice("Transcribing speech…");
+      return;
+    }
+
+    if (isTranscribing) {
       return;
     }
 
     await startVoiceInput();
   };
+
+  const listeningDots = ".".repeat(listeningDotsStep + 1);
+  const composerPlaceholder =
+    isListening && !inputValue
+      ? `I'm listening${listeningDots}`
+      : isTranscribing && !inputValue
+        ? "Transcribing speech…"
+        : COMPOSER_PLACEHOLDER;
+  const statusMessage = isListening
+    ? `I'm listening${listeningDots}`
+    : composerNotice ??
+      (!voiceSupported
+        ? "Voice input is unavailable in this browser."
+        : micPermissionDenied
+          ? "Microphone access was denied."
+          : "");
 
   return (
     <div className="mx-auto w-full max-w-[960px]">
@@ -574,10 +733,13 @@ function PromptComposer({
           <ComposerActionButton
             icon={isComposerCompact ? Maximize2 : Minimize2}
             tooltip="Resize composer"
+            tooltipId="resize"
+            activeTooltip={activeTooltip}
+            onTooltipChange={setActiveTooltip}
             onClick={() => {
               setIsComposerCompact((current) => !current);
-              setIsUploadMenuOpen(false);
               setIsDepthMenuOpen(false);
+              setActiveTooltip(null);
               focusComposer();
             }}
             className="absolute right-[18px] top-[14px] h-[34px] w-[34px] border-transparent bg-transparent shadow-none hover:bg-white/70 dark:hover:bg-white/[0.05]"
@@ -597,10 +759,11 @@ function PromptComposer({
                 handleSubmit();
               }
             }}
-            placeholder={COMPOSER_PLACEHOLDER}
+            placeholder={composerPlaceholder}
             rows={1}
             className={cn(
               "w-full resize-none overflow-y-auto bg-transparent pr-14 text-[15px] leading-6 text-[#1f2330] outline-none placeholder:text-[var(--start-composer-placeholder)] dark:text-white/[0.92]",
+              isListening && "placeholder:text-[rgba(107,114,128,0.78)] dark:placeholder:text-white/[0.44]",
               isComposerCompact ? "min-h-[28px]" : "min-h-[84px]"
             )}
           />
@@ -611,32 +774,20 @@ function PromptComposer({
               isComposerCompact ? "pointer-events-none translate-y-2 opacity-0" : "opacity-100"
             )}
           >
-            <div ref={uploadTriggerRef} className="relative">
-              <ComposerActionButton
-                icon={Plus}
-                tooltip="Attach file"
-                onClick={() => {
-                  setIsUploadMenuOpen((current) => !current);
-                  setIsDepthMenuOpen(false);
-                }}
-                className="shadow-none hover:bg-white dark:border-white/[0.12] dark:bg-white/[0.035] dark:text-white/[0.82] dark:hover:bg-white/[0.06]"
-              />
-              {isUploadMenuOpen ? (
-                <div
-                  ref={uploadMenuRef}
-                  className="absolute bottom-[calc(100%+12px)] left-0 z-30 w-[184px] rounded-[18px] border border-[var(--start-border-soft)] bg-[var(--start-surface-strong)] p-2 shadow-[0_18px_40px_-26px_rgba(15,23,42,0.28)] dark:border-white/[0.08] dark:bg-[rgba(20,19,28,0.98)]"
-                >
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="flex w-full items-center gap-3 rounded-[14px] px-3 py-2.5 text-left text-[14px] font-medium text-[var(--start-title)] transition-colors hover:bg-white dark:text-white/[0.9] dark:hover:bg-white/[0.04]"
-                  >
-                    <Upload className="h-4 w-4" strokeWidth={1.9} />
-                    Upload file
-                  </button>
-                </div>
-              ) : null}
-            </div>
+            <ComposerActionButton
+              icon={Plus}
+              tooltip="Attach file"
+              tooltipId="attach"
+              activeTooltip={activeTooltip}
+              onTooltipChange={setActiveTooltip}
+              onClick={() => {
+                setIsDepthMenuOpen(false);
+                setActiveTooltip(null);
+                fileInputRef.current?.click();
+              }}
+              className="shadow-none hover:bg-white dark:border-white/[0.12] dark:bg-white/[0.035] dark:text-white/[0.82] dark:hover:bg-white/[0.06]"
+              tooltipClassName="-translate-x-[58%]"
+            />
           </div>
 
           <div
@@ -649,54 +800,43 @@ function PromptComposer({
               <ComposerActionButton
                 icon={SlidersHorizontal}
                 tooltip={`Response depth: ${complexityLevel}`}
+                tooltipId="depth"
+                activeTooltip={activeTooltip}
+                onTooltipChange={setActiveTooltip}
                 onClick={() => {
                   setIsDepthMenuOpen((current) => !current);
-                  setIsUploadMenuOpen(false);
+                  setActiveTooltip(null);
                 }}
                 badge={complexityLevel.charAt(0)}
                 className="shadow-none"
               />
-              {isDepthMenuOpen ? (
-                <div
-                  ref={depthMenuRef}
-                  className="absolute bottom-[calc(100%+12px)] right-0 z-30 w-[180px] rounded-[18px] border border-[var(--start-border-soft)] bg-[var(--start-surface-strong)] p-2 shadow-[0_18px_40px_-26px_rgba(15,23,42,0.28)] dark:border-white/[0.08] dark:bg-[rgba(20,19,28,0.98)]"
-                >
-                  {COMPLEXITY_LEVELS.map((level) => (
-                    <button
-                      key={level}
-                      type="button"
-                      onClick={() => {
-                        setComplexityLevel(level);
-                        setIsDepthMenuOpen(false);
-                        focusComposer();
-                      }}
-                      className={cn(
-                        "flex w-full items-center justify-between rounded-[14px] px-3 py-2 text-left text-[14px] font-medium transition-colors",
-                        level === complexityLevel
-                          ? "bg-white text-[var(--start-title)] dark:bg-white/[0.06] dark:text-white"
-                          : "text-[var(--start-title)] hover:bg-white dark:text-white/[0.86] dark:hover:bg-white/[0.04]"
-                      )}
-                    >
-                      <span>{level}</span>
-                      {level === complexityLevel ? <Check className="h-4 w-4" strokeWidth={2} /> : null}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
             </div>
 
             <ComposerActionButton
               icon={Mic}
               tooltip="Chat using voice"
+              tooltipId="voice"
+              activeTooltip={activeTooltip}
+              onTooltipChange={setActiveTooltip}
               onClick={() => {
+                setActiveTooltip(null);
                 void toggleVoiceInput();
               }}
-              active={isListening}
-              className={cn(isListening ? "animate-pulse" : "")}
+              active={false}
+              disabled={isTranscribing}
+              className={cn(
+                "transition-[background-color,border-color,color,box-shadow,transform] duration-200",
+                isListening
+                  ? "border-[#ef4444]/55 bg-[#ef4444] text-white shadow-[0_0_0_4px_rgba(239,68,68,0.14),0_12px_22px_-14px_rgba(239,68,68,0.7)] scale-[1.03] hover:bg-[#ef4444] dark:border-[#f87171]/60 dark:bg-[#ef4444] dark:text-white dark:shadow-[0_0_0_4px_rgba(248,113,113,0.16),0_12px_24px_-14px_rgba(239,68,68,0.65)] animate-[pulse_1.2s_ease-in-out_infinite]"
+                  : ""
+              )}
             />
             <ComposerActionButton
               icon={SendHorizontal}
               tooltip="Send message"
+              tooltipId="send"
+              activeTooltip={activeTooltip}
+              onTooltipChange={setActiveTooltip}
               onClick={handleSubmit}
               prominent
               disabled={!inputValue.trim()}
@@ -726,22 +866,100 @@ function PromptComposer({
       <input
         ref={fileInputRef}
         type="file"
+        multiple
         className="sr-only"
         onChange={handleFileSelection}
       />
 
-      {selectedFile || composerNotice || micPermissionDenied || !voiceSupported ? (
+      {isDepthMenuOpen && depthMenuPosition && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              ref={depthMenuRef}
+              className="fixed z-[9999] min-w-[208px] rounded-[18px] border border-[var(--start-border-soft)] bg-white p-2.5 shadow-[0_18px_40px_-26px_rgba(15,23,42,0.28)] dark:border-white/[0.08] dark:bg-[#14131c]"
+              style={{
+                top: depthMenuPosition.top,
+                left: depthMenuPosition.left,
+                transform: "translateY(-100%)",
+              }}
+            >
+              {COMPLEXITY_LEVELS.map((level) => (
+                <button
+                  key={level}
+                  type="button"
+                  onClick={() => {
+                    setComplexityLevel(level);
+                    setIsDepthMenuOpen(false);
+                    setActiveTooltip(null);
+                    focusComposer();
+                  }}
+                  className={cn(
+                    "flex w-full items-center justify-between rounded-[14px] px-3.5 py-2 text-left text-[14px] font-medium whitespace-nowrap transition-colors",
+                    level === complexityLevel
+                      ? "bg-white text-[var(--start-title)] dark:bg-white/[0.06] dark:text-white"
+                      : "text-[var(--start-title)] hover:bg-white dark:text-white/[0.86] dark:hover:bg-white/[0.04]"
+                  )}
+                >
+                  <span>{level}</span>
+                  {level === complexityLevel ? <Check className="h-4 w-4" strokeWidth={2} /> : null}
+                </button>
+              ))}
+            </div>,
+            document.body
+          )
+        : null}
+
+      {attachedFiles.length > 0 || isListening || composerNotice || micPermissionDenied || !voiceSupported ? (
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-1 text-[12px] font-medium text-[var(--start-helper)] dark:text-white/[0.52]">
-          <span>
-            {selectedFile ? `Attached: ${selectedFile.name}` : "\u00A0"}
-          </span>
-          <span>
-            {composerNotice ??
-              (!voiceSupported
-                ? "Voice input is unavailable in this browser."
-                : micPermissionDenied
-                  ? "Microphone access was denied."
-                  : "")}
+          <div className="flex min-h-[28px] flex-wrap items-center gap-2">
+            {attachedFiles.length > 0 ? (
+              attachedFiles.map((attachment) => {
+                const fileMeta = getFileMeta(attachment.file);
+                return (
+                  <div
+                    key={attachment.id}
+                    className="inline-flex max-w-[320px] items-center gap-2 rounded-full border border-[var(--start-border-soft)] bg-[var(--start-surface-strong)] px-2 py-1.5 shadow-[0_10px_20px_-18px_rgba(15,23,42,0.2)] dark:border-white/[0.08] dark:bg-white/[0.04]"
+                  >
+                    {fileMeta.kind === "image" && attachment.previewUrl ? (
+                      <img
+                        src={attachment.previewUrl}
+                        alt={attachment.file.name}
+                        className="h-7 w-7 rounded-[8px] object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-7 w-7 items-center justify-center rounded-[8px] bg-[#f2f5fb] dark:bg-white/[0.06]">
+                        <fileMeta.icon
+                          className={cn("h-4 w-4", fileMeta.accent)}
+                          strokeWidth={1.9}
+                        />
+                      </div>
+                    )}
+                    <span className="truncate text-[12px] font-medium text-[var(--start-title)] dark:text-white/[0.84]">
+                      {attachment.file.name}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={`Remove ${attachment.file.name}`}
+                      onClick={() => handleRemoveAttachment(attachment.id)}
+                      className="flex h-5 w-5 items-center justify-center rounded-full text-[#6b7280] transition-colors hover:bg-black/5 hover:text-[#111827] dark:text-white/[0.56] dark:hover:bg-white/[0.08] dark:hover:text-white/[0.9]"
+                    >
+                      <X className="h-3.5 w-3.5" strokeWidth={2} />
+                    </button>
+                  </div>
+                );
+              })
+            ) : (
+              <span>&nbsp;</span>
+            )}
+          </div>
+          <span
+            className={cn(
+              "transition-opacity duration-200",
+              isListening
+                ? "text-[rgba(111,114,128,0.86)] dark:text-white/[0.46]"
+                : ""
+            )}
+          >
+            {statusMessage}
           </span>
         </div>
       ) : null}
