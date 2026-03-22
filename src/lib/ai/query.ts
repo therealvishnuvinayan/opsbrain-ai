@@ -1,6 +1,8 @@
 import "server-only";
 
 import {
+  analyzeOrderPatterns,
+  analyzeOrderTrend,
   getClientOrderHistory,
   getOrderDetails,
   getOrderHistory,
@@ -9,6 +11,11 @@ import {
 import {
   buildOrderDetailFallbackAnswer,
   buildOrderDetailPrompt,
+  buildFailedOrdersFallbackAnswer,
+  buildOrderPatternAnalysisFallbackAnswer,
+  buildOrderPatternAnalysisPrompt,
+  buildOrderTrendAnalysisFallbackAnswer,
+  buildOrderTrendAnalysisPrompt,
   buildOrderHistoryFallbackAnswer,
   buildOrderHistoryPrompt,
 } from "@/lib/ai/order-prompt";
@@ -41,12 +48,30 @@ export type ResolvedAiQuery =
 
 type QueryIntent =
   | {
-      type: "order_history";
+      type: "recent_orders_summary";
       filters: OrderHistoryFilters;
       useClientHistory: boolean;
     }
   | {
-      type: "order_lookup";
+      type: "failed_orders_summary";
+      filters: OrderHistoryFilters;
+      useClientHistory: boolean;
+    }
+  | {
+      type: "order_pattern_analysis";
+      filters: OrderHistoryFilters;
+      useClientHistory: boolean;
+    }
+  | {
+      type: "order_trend_analysis";
+      recentFilters: OrderHistoryFilters;
+      previousFilters: OrderHistoryFilters;
+      recentLabel: string;
+      previousLabel: string;
+      useClientHistory: boolean;
+    }
+  | {
+      type: "order_detail";
       orderId: string;
     }
   | {
@@ -69,6 +94,96 @@ interface OpenAIChatCompletionResponse {
   }>;
 }
 
+function startOfDay(date: Date) {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+function endOfDay(date: Date) {
+  const next = new Date(date);
+  next.setHours(23, 59, 59, 999);
+  return next;
+}
+
+function applyQuestionFilters(question: string, baseFilters: OrderHistoryFilters = {}) {
+  const normalized = question.trim().toLowerCase();
+  const filters: OrderHistoryFilters = {
+    PageSize: baseFilters.PageSize ?? 10,
+    PageIndex: baseFilters.PageIndex ?? 0,
+    SearchText: baseFilters.SearchText,
+    DateFrom: baseFilters.DateFrom,
+    DateTo: baseFilters.DateTo,
+    Status: baseFilters.Status,
+    SupplierId: baseFilters.SupplierId,
+  };
+
+  if (normalized.includes("today")) {
+    const now = new Date();
+    filters.DateFrom = startOfDay(now).toISOString();
+    filters.DateTo = endOfDay(now).toISOString();
+    return filters;
+  }
+
+  if (normalized.includes("yesterday")) {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    filters.DateFrom = startOfDay(yesterday).toISOString();
+    filters.DateTo = endOfDay(yesterday).toISOString();
+    return filters;
+  }
+
+  if (normalized.includes("last 30 days")) {
+    const now = new Date();
+    const from = new Date(now);
+    from.setDate(now.getDate() - 30);
+    filters.DateFrom = from.toISOString();
+    filters.DateTo = now.toISOString();
+    return filters;
+  }
+
+  if (normalized.includes("last 7 days")) {
+    const now = new Date();
+    const from = new Date(now);
+    from.setDate(now.getDate() - 7);
+    filters.DateFrom = from.toISOString();
+    filters.DateTo = now.toISOString();
+  }
+
+  return filters;
+}
+
+function buildTrendWindow(days: number) {
+  const now = new Date();
+  const recentTo = now;
+  const recentFrom = new Date(now);
+  recentFrom.setDate(now.getDate() - days);
+
+  const previousTo = new Date(recentFrom);
+  previousTo.setMilliseconds(previousTo.getMilliseconds() - 1);
+  const previousFrom = new Date(previousTo);
+  previousFrom.setDate(previousTo.getDate() - days);
+
+  return {
+    recentFilters: {
+      PageSize: 50,
+      PageIndex: 0,
+      Status: "failed",
+      DateFrom: recentFrom.toISOString(),
+      DateTo: recentTo.toISOString(),
+    } satisfies OrderHistoryFilters,
+    previousFilters: {
+      PageSize: 50,
+      PageIndex: 0,
+      Status: "failed",
+      DateFrom: previousFrom.toISOString(),
+      DateTo: previousTo.toISOString(),
+    } satisfies OrderHistoryFilters,
+    recentLabel: `Last ${days} days`,
+    previousLabel: `Previous ${days} days`,
+  };
+}
+
 function parseQuestionIntent(question: string): QueryIntent {
   const normalized = question.trim().toLowerCase();
   const orderIdMatch =
@@ -84,6 +199,20 @@ function parseQuestionIntent(question: string): QueryIntent {
     normalized.includes("list orders") ||
     normalized.includes("show orders");
   const asksForClientOrders = normalized.includes("client order");
+  const asksForPatternAnalysis =
+    normalized.includes("common problem") ||
+    normalized.includes("common issue") ||
+    normalized.includes("pattern") ||
+    normalized.includes("across failed orders");
+  const asksForTrendAnalysis =
+    normalized.includes("increasing") ||
+    normalized.includes("going up") ||
+    normalized.includes("going down") ||
+    normalized.includes("trend");
+  const asksForFailedOrders =
+    normalized.includes("failed orders") ||
+    normalized.includes("failing orders") ||
+    normalized.includes("failures");
   const asksForSpecificOrder =
     normalized.includes("order details") ||
     normalized.includes("order status") ||
@@ -98,35 +227,63 @@ function parseQuestionIntent(question: string): QueryIntent {
 
   if (orderId && (asksForSpecificOrder || normalized.includes("order"))) {
     return {
-      type: "order_lookup",
+      type: "order_detail",
       orderId,
     };
   }
 
-  if (asksForHistory) {
-    const filters: OrderHistoryFilters = {
-      PageSize: 10,
-      PageIndex: 0,
-    };
+  if (asksForTrendAnalysis && (asksForFailedOrders || normalized.includes("recently"))) {
+    const days = normalized.includes("30") ? 30 : 7;
+    const window = buildTrendWindow(days);
 
-    if (normalized.includes("failed")) {
-      filters.Status = "failed";
-    } else if (normalized.includes("blocked")) {
+    return {
+      type: "order_trend_analysis",
+      recentFilters: window.recentFilters,
+      previousFilters: window.previousFilters,
+      recentLabel: window.recentLabel,
+      previousLabel: window.previousLabel,
+      useClientHistory: asksForClientOrders,
+    };
+  }
+
+  if (asksForPatternAnalysis) {
+    return {
+      type: "order_pattern_analysis",
+      filters: applyQuestionFilters(question, {
+        PageSize: 25,
+        PageIndex: 0,
+        Status: asksForFailedOrders ? "failed" : undefined,
+      }),
+      useClientHistory: asksForClientOrders,
+    };
+  }
+
+  if (asksForFailedOrders) {
+    return {
+      type: "failed_orders_summary",
+      filters: applyQuestionFilters(question, {
+        PageSize: 25,
+        PageIndex: 0,
+        Status: "failed",
+      }),
+      useClientHistory: asksForClientOrders,
+    };
+  }
+
+  if (asksForHistory || normalized.includes("today")) {
+    const filters = applyQuestionFilters(question, {
+      PageSize: 20,
+      PageIndex: 0,
+    });
+
+    if (normalized.includes("blocked")) {
       filters.Status = "blocked";
     } else if (normalized.includes("pending")) {
       filters.Status = "pending";
     }
 
-    if (normalized.includes("last 7 days")) {
-      const now = new Date();
-      const sevenDaysAgo = new Date(now);
-      sevenDaysAgo.setDate(now.getDate() - 7);
-      filters.DateFrom = sevenDaysAgo.toISOString();
-      filters.DateTo = now.toISOString();
-    }
-
     return {
-      type: "order_history",
+      type: "recent_orders_summary",
       filters,
       useClientHistory: asksForClientOrders,
     };
@@ -215,22 +372,81 @@ export async function resolveAiQuery(question: string): Promise<ResolvedAiQuery>
   if (intent.type === "unsupported") {
     return {
       type: "unsupported",
-      answer: "This first version currently supports order history and order detail queries.",
+      answer:
+        "This first version currently supports recent orders, failed orders, order patterns, trend checks, and order details.",
       sources: [],
     };
   }
 
-  if (intent.type === "order_history") {
+  if (intent.type === "recent_orders_summary") {
     const result = intent.useClientHistory
       ? await getClientOrderHistory(intent.filters)
       : await getOrderHistory(intent.filters);
-    const prompt = buildOrderHistoryPrompt(question, result.context);
+    const prompt = buildOrderHistoryPrompt(question, result.context, {
+      mode: "recent_orders_summary",
+    });
 
     return {
       type: "resolved",
       prompt,
       fallbackAnswer: buildOrderHistoryFallbackAnswer(result.context),
       sources: result.sources,
+    };
+  }
+
+  if (intent.type === "failed_orders_summary") {
+    const result = intent.useClientHistory
+      ? await getClientOrderHistory(intent.filters)
+      : await getOrderHistory(intent.filters);
+    const prompt = buildOrderHistoryPrompt(question, result.context, {
+      mode: "failed_orders_summary",
+    });
+
+    return {
+      type: "resolved",
+      prompt,
+      fallbackAnswer: buildFailedOrdersFallbackAnswer(result.context),
+      sources: result.sources,
+    };
+  }
+
+  if (intent.type === "order_pattern_analysis") {
+    const result = intent.useClientHistory
+      ? await getClientOrderHistory(intent.filters)
+      : await getOrderHistory(intent.filters);
+    const analysis = analyzeOrderPatterns(result.context);
+    const prompt = buildOrderPatternAnalysisPrompt(question, analysis);
+
+    return {
+      type: "resolved",
+      prompt,
+      fallbackAnswer: buildOrderPatternAnalysisFallbackAnswer(analysis),
+      sources: result.sources,
+    };
+  }
+
+  if (intent.type === "order_trend_analysis") {
+    const [recentResult, previousResult] = await Promise.all([
+      intent.useClientHistory
+        ? getClientOrderHistory(intent.recentFilters)
+        : getOrderHistory(intent.recentFilters),
+      intent.useClientHistory
+        ? getClientOrderHistory(intent.previousFilters)
+        : getOrderHistory(intent.previousFilters),
+    ]);
+    const trend = analyzeOrderTrend({
+      recent: recentResult.context,
+      previous: previousResult.context,
+      recentLabel: intent.recentLabel,
+      previousLabel: intent.previousLabel,
+    });
+    const prompt = buildOrderTrendAnalysisPrompt(question, trend);
+
+    return {
+      type: "resolved",
+      prompt,
+      fallbackAnswer: buildOrderTrendAnalysisFallbackAnswer(trend),
+      sources: [...recentResult.sources, ...previousResult.sources],
     };
   }
 

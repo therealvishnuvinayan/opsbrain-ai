@@ -3,6 +3,8 @@ import "server-only";
 import type {
   NormalizedOrderDetail,
   NormalizedOrderHistory,
+  OrderPatternAnalysis,
+  OrderTrendAnalysis,
 } from "@/lib/bamboo/orders";
 
 function joinExamples(values: string[], max = 3) {
@@ -49,10 +51,38 @@ function formatCheckList(items: string[]) {
   return `You should check:\n${items.map((item) => `- ${item}`).join("\n")}`;
 }
 
+function buildPatternNextStep(context: OrderPatternAnalysis) {
+  if (context.repeatedIssue === "missing_cards") {
+    return ["card creation", "supplier processing"];
+  }
+
+  if (context.repeatedIssue === "blocked") {
+    return ["where the orders are getting stuck", "supplier processing"];
+  }
+
+  if (context.repeatedIssue === "pending") {
+    return ["where the delay starts", "supplier processing"];
+  }
+
+  return ["payment", "supplier processing", "card creation"];
+}
+
+function buildTrendNextStep(context: OrderTrendAnalysis) {
+  if (context.direction === "up") {
+    return ["payment", "supplier processing", "card creation"];
+  }
+
+  return ["recent failed orders", "the latest order updates"];
+}
+
 export function buildOrderHistoryPrompt(
   question: string,
-  context: NormalizedOrderHistory
+  context: NormalizedOrderHistory,
+  options?: {
+    mode?: "recent_orders_summary" | "failed_orders_summary";
+  }
 ) {
+  const mode = options?.mode ?? "recent_orders_summary";
   return {
     system: [
       "You are Bamboo AI, a helpful teammate for operations users.",
@@ -62,6 +92,9 @@ export function buildOrderHistoryPrompt(
       "If all checked orders show the same status, say all.",
       "If the sample is mixed, say most when that is true.",
       "Use phrases like 'in Failed status' instead of 'are Failed'.",
+      mode === "failed_orders_summary"
+        ? "Focus on what the failed orders are showing right now."
+        : "Focus on the overall picture in the recent orders.",
       "Start with what is happening in plain language.",
       "Then explain the pattern in simple words.",
       "Mention up to 2 or 3 example order ids when useful.",
@@ -80,6 +113,67 @@ export function buildOrderHistoryPrompt(
       "2. what pattern we see",
       "3. example orders if useful",
       "4. what to check next",
+      "Use a blank line between sections.",
+      "Use bullet points for the final 'You should check:' section.",
+    ].join("\n\n"),
+  };
+}
+
+export function buildOrderPatternAnalysisPrompt(
+  question: string,
+  context: OrderPatternAnalysis
+) {
+  return {
+    system: [
+      "You are Bamboo AI, a helpful teammate for operations users.",
+      "Answer only from the order pattern analysis data you are given.",
+      "Use simple English and keep the answer short and clear.",
+      "Explain the common issue across the failed orders if one is visible.",
+      "Mention up to 2 or 3 example order ids.",
+      "Format the answer with a blank line between sections.",
+      "Write the final 'You should check:' section as bullet points, with one bullet on each line.",
+      "Do not use technical jargon.",
+      "Do not invent causes that are not shown.",
+    ].join(" "),
+    user: [
+      `User question: ${question}`,
+      "Order pattern analysis data:",
+      JSON.stringify(context, null, 2),
+      "Write a short answer in this order:",
+      "1. what common issue is showing up",
+      "2. the main pattern",
+      "3. example orders if useful",
+      "4. what to check next",
+      "Use a blank line between sections.",
+      "Use bullet points for the final 'You should check:' section.",
+    ].join("\n\n"),
+  };
+}
+
+export function buildOrderTrendAnalysisPrompt(
+  question: string,
+  context: OrderTrendAnalysis
+) {
+  return {
+    system: [
+      "You are Bamboo AI, a helpful teammate for operations users.",
+      "Answer only from the order trend data you are given.",
+      "Use simple English and keep the answer short and clear.",
+      "Say clearly if failures are going up, down, or staying flat.",
+      "Mention the two time windows and the counts.",
+      "Format the answer with a blank line between sections.",
+      "Write the final 'You should check:' section as bullet points, with one bullet on each line.",
+      "Do not use technical jargon.",
+      "Do not invent reasons that are not shown.",
+    ].join(" "),
+    user: [
+      `User question: ${question}`,
+      "Order trend data:",
+      JSON.stringify(context, null, 2),
+      "Write a short answer in this order:",
+      "1. what is changing",
+      "2. the comparison between the two time windows",
+      "3. what to check next",
       "Use a blank line between sections.",
       "Use bullet points for the final 'You should check:' section.",
     ].join("\n\n"),
@@ -146,6 +240,87 @@ export function buildOrderHistoryFallbackAnswer(context: NormalizedOrderHistory)
     opening,
     pattern,
     examplesLine,
+    formatCheckList(nextSteps),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+export function buildFailedOrdersFallbackAnswer(context: NormalizedOrderHistory) {
+  if (context.orders.length === 0) {
+    return "I could not find failed orders for that time.";
+  }
+
+  const sampleSize = context.returnedCount;
+  const examples = joinExamples(context.issueOrderIds.length > 0 ? context.issueOrderIds : context.orders.map((order) => order.orderNumber));
+  const nextSteps = buildHistoryNextStep(context);
+
+  return [
+    `I found ${sampleSize} failed orders in the current result.`,
+    examples ? `Example orders: ${examples}.` : "",
+    formatCheckList(nextSteps),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+export function buildOrderPatternAnalysisFallbackAnswer(context: OrderPatternAnalysis) {
+  if (context.sampleSize === 0) {
+    return "I could not find failed orders to compare.";
+  }
+
+  const examples = joinExamples(context.issueOrderIds);
+  const opening =
+    context.repeatedIssue === "missing_cards"
+      ? "A repeated issue is that some orders have items, but no cards were created."
+      : context.repeatedIssue === "blocked"
+        ? "A repeated issue is that many of the failed orders also look blocked."
+        : context.repeatedIssue === "pending"
+          ? "A repeated issue is that many of the failed orders are still stuck in a waiting state."
+          : context.failureCount > 0
+            ? "The failed orders are showing the same problem again and again."
+            : "The failed orders show a mixed pattern.";
+  const pattern =
+    context.topStatuses.length > 0
+      ? `Main status pattern: ${context.topStatuses
+          .map((item) => `${item.count} in ${item.status} status`)
+          .join(", ")}.`
+      : "";
+  const suppliers =
+    context.topSuppliers.length > 0
+      ? `Common suppliers in this sample: ${context.topSuppliers.join(", ")}.`
+      : "";
+  const nextSteps = buildPatternNextStep(context);
+
+  return [
+    opening,
+    pattern,
+    examples ? `Example orders: ${examples}.` : "",
+    suppliers,
+    formatCheckList(nextSteps),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+export function buildOrderTrendAnalysisFallbackAnswer(context: OrderTrendAnalysis) {
+  const opening =
+    context.direction === "up"
+      ? "Failed orders are going up."
+      : context.direction === "down"
+        ? "Failed orders are going down."
+        : "Failed orders are staying about the same.";
+  const comparison = `${context.recentWindow.label}: ${context.recentWindow.count}. ${context.previousWindow.label}: ${context.previousWindow.count}.`;
+  const change =
+    context.percentChange !== undefined && context.direction !== "flat"
+      ? `That is a ${Math.abs(context.percentChange)}% change.`
+      : "";
+  const nextSteps = buildTrendNextStep(context);
+
+  return [
+    opening,
+    comparison,
+    change,
     formatCheckList(nextSteps),
   ]
     .filter(Boolean)

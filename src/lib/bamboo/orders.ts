@@ -52,6 +52,43 @@ export interface NormalizedOrderHistory {
   orders: NormalizedOrderSummary[];
 }
 
+export interface OrderPatternAnalysis {
+  checkedAt: string;
+  sampleSize: number;
+  totalCount?: number;
+  issueOrderIds: string[];
+  topStatuses: Array<{
+    status: string;
+    count: number;
+  }>;
+  failureCount: number;
+  blockedCount: number;
+  pendingCount: number;
+  missingCardsCount: number;
+  topSuppliers: string[];
+  repeatedIssue: "failed" | "blocked" | "pending" | "missing_cards" | "mixed" | "unknown";
+}
+
+export interface OrderTrendAnalysis {
+  checkedAt: string;
+  metric: "failed_orders";
+  recentWindow: {
+    label: string;
+    from: string;
+    to: string;
+    count: number;
+  };
+  previousWindow: {
+    label: string;
+    from: string;
+    to: string;
+    count: number;
+  };
+  direction: "up" | "down" | "flat";
+  delta: number;
+  percentChange?: number;
+}
+
 export interface NormalizedOrderDetail {
   checkedAt: string;
   orderId: string;
@@ -143,6 +180,12 @@ function firstRecordArray(record: Record<string, unknown>, keys: string[]) {
 
 function normalizeStatus(value: string | undefined) {
   return value?.trim() || "unknown";
+}
+
+function countStatusesMatching(statuses: Record<string, number>, pattern: RegExp) {
+  return Object.entries(statuses).reduce((total, [status, count]) => {
+    return pattern.test(status.toLowerCase()) ? total + count : total;
+  }, 0);
 }
 
 function getDominantStatus(statuses: Record<string, number>) {
@@ -373,6 +416,95 @@ export async function getClientOrderHistory(filters: OrderHistoryFilters = {}) {
   return {
     context: normalizeHistoryPayload(raw, filters),
     sources: [{ type: "swagger" as const, endpoint: "/api/Orders/client/history" }],
+  };
+}
+
+export function analyzeOrderPatterns(context: NormalizedOrderHistory): OrderPatternAnalysis {
+  const topStatuses = Object.entries(context.statuses)
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 3)
+    .map(([status, count]) => ({ status, count }));
+  const failureCount = countStatusesMatching(context.statuses, /fail|error/);
+  const blockedCount = countStatusesMatching(context.statuses, /block/);
+  const pendingCount = countStatusesMatching(context.statuses, /pending|delay/);
+  const missingCardsOrders = context.orders.filter(
+    (order) => order.itemCount && order.itemCount > 0 && order.cardCount === 0
+  );
+  const topSuppliers = Object.entries(
+    context.orders.reduce<Record<string, number>>((accumulator, order) => {
+      if (!order.supplierName || order.notableIssues.length === 0) {
+        return accumulator;
+      }
+
+      accumulator[order.supplierName] = (accumulator[order.supplierName] ?? 0) + 1;
+      return accumulator;
+    }, {})
+  )
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 3)
+    .map(([supplier]) => supplier);
+
+  let repeatedIssue: OrderPatternAnalysis["repeatedIssue"] = "unknown";
+
+  if (missingCardsOrders.length > 0) {
+    repeatedIssue = "missing_cards";
+  } else if (failureCount > 0 && failureCount >= blockedCount && failureCount >= pendingCount) {
+    repeatedIssue = "failed";
+  } else if (blockedCount > 0 && blockedCount >= pendingCount) {
+    repeatedIssue = "blocked";
+  } else if (pendingCount > 0) {
+    repeatedIssue = "pending";
+  } else if (Object.keys(context.statuses).length > 1) {
+    repeatedIssue = "mixed";
+  }
+
+  return {
+    checkedAt: new Date().toISOString(),
+    sampleSize: context.returnedCount,
+    totalCount: context.totalCount,
+    issueOrderIds: context.issueOrderIds.slice(0, 5),
+    topStatuses,
+    failureCount,
+    blockedCount,
+    pendingCount,
+    missingCardsCount: missingCardsOrders.length,
+    topSuppliers,
+    repeatedIssue,
+  };
+}
+
+export function analyzeOrderTrend(input: {
+  recent: NormalizedOrderHistory;
+  previous: NormalizedOrderHistory;
+  recentLabel: string;
+  previousLabel: string;
+}): OrderTrendAnalysis {
+  const recentCount = input.recent.totalCount ?? input.recent.returnedCount;
+  const previousCount = input.previous.totalCount ?? input.previous.returnedCount;
+  const delta = recentCount - previousCount;
+  const percentChange =
+    previousCount > 0 ? Math.round((delta / previousCount) * 100) : undefined;
+  const direction =
+    delta > 0 ? "up" : delta < 0 ? "down" : "flat";
+
+  return {
+    checkedAt: new Date().toISOString(),
+    metric: "failed_orders",
+    recentWindow: {
+      label: input.recentLabel,
+      from: input.recent.querySummary.dateFrom ?? "",
+      to: input.recent.querySummary.dateTo ?? "",
+      count: recentCount,
+    },
+    previousWindow: {
+      label: input.previousLabel,
+      from: input.previous.querySummary.dateFrom ?? "",
+      to: input.previous.querySummary.dateTo ?? "",
+      count: previousCount,
+    },
+    direction,
+    delta,
+    percentChange,
   };
 }
 
