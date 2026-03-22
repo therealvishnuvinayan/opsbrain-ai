@@ -20,6 +20,14 @@ interface MessageItemResponse {
   conversation: ChatConversation;
 }
 
+interface AiQueryResponse {
+  answer: string;
+  sources: Array<{
+    type: string;
+    endpoint?: string;
+  }>;
+}
+
 interface StreamDonePayload {
   item: ChatMessage;
   conversation: ChatConversation;
@@ -102,6 +110,21 @@ export async function appendChatMessage(
   });
 
   return parseJsonResponse<MessageItemResponse>(response);
+}
+
+export async function queryAi(question: string, conversationId?: string | null) {
+  const response = await fetch("/api/ai/query", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      question,
+      conversationId,
+    }),
+  });
+
+  return parseJsonResponse<AiQueryResponse>(response);
 }
 
 export async function streamAssistantMessage(
