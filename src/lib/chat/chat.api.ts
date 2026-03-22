@@ -28,14 +28,10 @@ interface AiQueryResponse {
   }>;
 }
 
-interface StreamDonePayload {
-  item: ChatMessage;
-  conversation: ChatConversation;
-}
-
-type StreamEvent =
+type AiStreamEvent =
+  | { type: "start"; sources: Array<{ type: string; endpoint?: string }> }
   | { type: "chunk"; delta: string; content: string }
-  | { type: "done"; payload: StreamDonePayload }
+  | { type: "done"; content: string; sources: Array<{ type: string; endpoint?: string }> }
   | { type: "error"; message: string };
 
 async function parseJsonResponse<T>(response: Response): Promise<T> {
@@ -127,25 +123,32 @@ export async function queryAi(question: string, conversationId?: string | null) 
   return parseJsonResponse<AiQueryResponse>(response);
 }
 
-export async function streamAssistantMessage(
-  conversationId: string,
+export async function streamAiQuery(
   body: {
-    prompt: string;
+    question: string;
+    conversationId?: string | null;
   },
   handlers: {
-    onChunk: (payload: { delta: string; content: string }) => void;
-    onDone: (payload: StreamDonePayload) => void;
+    onStart?: (payload: { sources: Array<{ type: string; endpoint?: string }> }) => void | Promise<void>;
+    onChunk: (payload: { delta: string; content: string }) => void | Promise<void>;
+    onDone: (
+      payload: { content: string; sources: Array<{ type: string; endpoint?: string }> }
+    ) => void | Promise<void>;
+    onError?: (payload: { message: string }) => void | Promise<void>;
   }
 ) {
-  const response = await fetch(`/api/chat/conversations/${conversationId}/stream`, {
+  const response = await fetch("/api/ai/stream", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      question: body.question,
+      conversationId: body.conversationId,
+    }),
   });
 
-  if (!response.ok || !response.body) {
+  if (!response.ok) {
     await parseJsonResponse(response);
   }
 
@@ -166,47 +169,70 @@ export async function streamAssistantMessage(
     }
 
     buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
+    const events = buffer.split("\n\n");
+    buffer = events.pop() ?? "";
 
-    for (const line of lines) {
-      const trimmed = line.trim();
+    for (const eventBlock of events) {
+      const dataLines = eventBlock
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith("data:"));
 
-      if (!trimmed) {
-        continue;
-      }
+      for (const line of dataLines) {
+        const data = line.slice(5).trim();
 
-      const event = JSON.parse(trimmed) as StreamEvent;
+        if (!data) {
+          continue;
+        }
 
-      if (event.type === "chunk") {
-        console.debug("chat stream chunk", event.delta);
-        handlers.onChunk({
-          delta: event.delta,
-          content: event.content,
-        });
-        continue;
-      }
+        const event = JSON.parse(data) as AiStreamEvent;
 
-      if (event.type === "done") {
-        console.debug("chat stream done");
-        handlers.onDone(event.payload);
-        continue;
-      }
+        if (event.type === "start") {
+          await handlers.onStart?.({
+            sources: event.sources,
+          });
+          continue;
+        }
 
-      if (event.type === "error") {
-        throw new Error(event.message);
+        if (event.type === "chunk") {
+          console.debug("ai stream chunk", event.delta);
+          await handlers.onChunk({
+            delta: event.delta,
+            content: event.content,
+          });
+          continue;
+        }
+
+        if (event.type === "done") {
+          console.debug("ai stream done");
+          await handlers.onDone({
+            content: event.content,
+            sources: event.sources,
+          });
+          continue;
+        }
+
+        if (event.type === "error") {
+          await handlers.onError?.({ message: event.message });
+          throw new Error(event.message);
+        }
       }
     }
   }
 
   const trailing = buffer.trim();
   if (trailing) {
-    const event = JSON.parse(trailing) as StreamEvent;
+    const line = trailing.startsWith("data:") ? trailing.slice(5).trim() : trailing;
+    const event = JSON.parse(line) as AiStreamEvent;
     if (event.type === "done") {
-      handlers.onDone(event.payload);
+      await handlers.onDone({
+        content: event.content,
+        sources: event.sources,
+      });
       return;
     }
     if (event.type === "error") {
+      await handlers.onError?.({ message: event.message });
       throw new Error(event.message);
     }
   }

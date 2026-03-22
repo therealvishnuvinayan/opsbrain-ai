@@ -7,7 +7,7 @@ import {
   createChatConversation,
   getChatConversation,
   listChatConversations,
-  queryAi,
+  streamAiQuery,
 } from "@/lib/chat/chat.api";
 import type { ChatConversation, ChatMessage } from "@/lib/chat/chat.types";
 import { createChatId, createConversationTitle } from "@/lib/chat/chat.utils";
@@ -85,6 +85,28 @@ function replaceMessageOrAppend(
   }
 
   return messages.map((message, index) => (index === targetIndex ? nextMessage : message));
+}
+
+function updateAssistantPlaceholder(
+  currentMessages: ChatMessage[],
+  options: {
+    assistantMessageId: string;
+    conversationId: string;
+    createdAt: string;
+    content: string;
+    status: ChatMessage["status"];
+    errorMessage?: string;
+  }
+) {
+  return replaceMessageOrAppend(currentMessages, options.assistantMessageId, {
+    id: options.assistantMessageId,
+    conversationId: options.conversationId,
+    role: "assistant",
+    content: options.content,
+    status: options.status,
+    createdAt: options.createdAt,
+    errorMessage: options.errorMessage,
+  });
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -474,29 +496,69 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
 
       try {
-        const aiResult = await queryAi(prompt, conversationId);
-        const persistedAssistantMessage = await appendChatMessage(conversationId, {
-          role: "assistant",
-          content: aiResult.answer,
-          status: "done",
-        });
+        let streamedContent = "";
+        let chunkCount = 0;
 
-        set((current) => ({
-          isSubmitting: false,
-          isStreaming: false,
-          conversations: upsertConversation(current.conversations, persistedAssistantMessage.conversation),
-          messagesByConversation: {
-            ...current.messagesByConversation,
-            [conversationId]: replaceMessageOrAppend(
-              current.messagesByConversation[conversationId] ?? [],
-              assistantMessageId,
-              {
-                ...persistedAssistantMessage.item,
-                id: assistantMessageId,
-              }
-            ),
+        await streamAiQuery(
+          {
+            question: prompt,
+            conversationId,
           },
-        }));
+          {
+            onChunk: ({ content }) => {
+              streamedContent = content;
+              chunkCount += 1;
+              console.debug("assistant chunk received", {
+                conversationId,
+                chunkCount,
+              });
+
+              set((current) => ({
+                messagesByConversation: {
+                  ...current.messagesByConversation,
+                  [conversationId]: updateAssistantPlaceholder(
+                    current.messagesByConversation[conversationId] ?? [],
+                    {
+                      assistantMessageId,
+                      conversationId,
+                      createdAt: timestamp,
+                      content,
+                      status: "streaming",
+                    }
+                  ),
+                },
+              }));
+            },
+            onDone: async ({ content }) => {
+              const finalContent = content.trim() || streamedContent.trim();
+              const persistedAssistantMessage = await appendChatMessage(conversationId, {
+                role: "assistant",
+                content: finalContent,
+                status: "done",
+              });
+
+              set((current) => ({
+                isSubmitting: false,
+                isStreaming: false,
+                conversations: upsertConversation(
+                  current.conversations,
+                  persistedAssistantMessage.conversation
+                ),
+                messagesByConversation: {
+                  ...current.messagesByConversation,
+                  [conversationId]: replaceMessageOrAppend(
+                    current.messagesByConversation[conversationId] ?? [],
+                    assistantMessageId,
+                    {
+                      ...persistedAssistantMessage.item,
+                      id: assistantMessageId,
+                    }
+                  ),
+                },
+              }));
+            },
+          }
+        );
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Assistant response could not be saved.";
@@ -506,16 +568,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
           isStreaming: false,
           messagesByConversation: {
             ...current.messagesByConversation,
-            [conversationId]: replaceMessageOrAppend(
+            [conversationId]: updateAssistantPlaceholder(
               current.messagesByConversation[conversationId] ?? [],
-              assistantMessageId,
               {
-                id: assistantMessageId,
+                assistantMessageId,
                 conversationId,
-                role: "assistant",
-                content: "I couldn't save the assistant response.",
-                status: "error",
                 createdAt: timestamp,
+                content:
+                  current.messagesByConversation[conversationId]?.find(
+                    (item) => item.id === assistantMessageId
+                  )?.content || "I couldn't save the assistant response.",
+                status: "error",
                 errorMessage: message,
               }
             ),
