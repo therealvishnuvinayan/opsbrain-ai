@@ -8,6 +8,7 @@ export function MessageItem({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user";
   const isError = message.status === "error";
   const isStreaming = message.status === "streaming";
+  const showTypingIndicator = isStreaming && !message.content.trim();
 
   return (
     <div className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}>
@@ -21,10 +22,15 @@ export function MessageItem({ message }: { message: ChatMessage }) {
             "border border-[#fecaca] bg-[rgba(254,242,242,0.96)] text-[#991b1b] dark:border-[#7f1d1d] dark:bg-[rgba(69,10,10,0.42)] dark:text-[#fecaca]"
         )}
       >
-        {isStreaming ? (
+        {showTypingIndicator ? (
           <TypingIndicator />
         ) : (
-          <p className="whitespace-pre-wrap break-words">{message.content}</p>
+          <p className="whitespace-pre-wrap break-words">
+            {message.content}
+            {isStreaming ? (
+              <span className="ml-0.5 inline-block h-[1.05em] w-[2px] animate-pulse rounded-full bg-current/45 align-[-0.15em]" />
+            ) : null}
+          </p>
         )}
         {isError && message.errorMessage ? (
           <p className="mt-2 text-[12px] font-medium text-current/70">{message.errorMessage}</p>

@@ -7,9 +7,10 @@ import {
   createChatConversation,
   getChatConversation,
   listChatConversations,
+  streamAssistantMessage,
 } from "@/lib/chat/chat.api";
 import type { ChatConversation, ChatMessage } from "@/lib/chat/chat.types";
-import { createChatId, createConversationTitle, getMockAssistantReply } from "@/lib/chat/chat.utils";
+import { createChatId, createConversationTitle } from "@/lib/chat/chat.utils";
 
 type ChatViewMode = "home" | "thread";
 
@@ -70,6 +71,46 @@ function upsertConversation(conversations: ChatConversation[], conversation: Cha
   return nextConversations.sort(
     (left, right) => new Date(right.lastUsedAt).getTime() - new Date(left.lastUsedAt).getTime()
   );
+}
+
+function replaceMessageOrAppend(
+  messages: ChatMessage[],
+  targetMessageId: string,
+  nextMessage: ChatMessage
+) {
+  const targetIndex = messages.findIndex((message) => message.id === targetMessageId);
+
+  if (targetIndex === -1) {
+    return [...messages, nextMessage];
+  }
+
+  return messages.map((message, index) => (index === targetIndex ? nextMessage : message));
+}
+
+function buildLocalAssistantMessage({
+  id,
+  conversationId,
+  createdAt,
+  content,
+  status,
+  errorMessage,
+}: {
+  id: string;
+  conversationId: string;
+  createdAt: string;
+  content: string;
+  status: ChatMessage["status"];
+  errorMessage?: string;
+}): ChatMessage {
+  return {
+    id,
+    conversationId,
+    role: "assistant",
+    content,
+    status,
+    createdAt,
+    errorMessage,
+  };
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -409,13 +450,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
           conversations: upsertConversation(current.conversations, persistedUserMessage.conversation),
           messagesByConversation: {
             ...current.messagesByConversation,
-            [conversationId]: (current.messagesByConversation[conversationId] ?? []).map((message) =>
-              message.id === userMessageId
-                ? {
-                    ...persistedUserMessage.item,
-                    status: "done",
-                  }
-                : message
+            [conversationId]: replaceMessageOrAppend(
+              current.messagesByConversation[conversationId] ?? [],
+              userMessageId,
+              {
+                ...persistedUserMessage.item,
+                status: "done",
+              }
             ),
           },
         }));
@@ -427,64 +468,107 @@ export const useChatStore = create<ChatState>((set, get) => ({
           isStreaming: false,
           messagesByConversation: {
             ...current.messagesByConversation,
-            [conversationId]: (current.messagesByConversation[conversationId] ?? []).map((item) => {
-              if (item.id === userMessageId) {
-                return {
-                  ...item,
+            [conversationId]: replaceMessageOrAppend(
+              replaceMessageOrAppend(
+                current.messagesByConversation[conversationId] ?? [],
+                userMessageId,
+                {
+                  id: userMessageId,
+                  conversationId,
+                  role: "user",
+                  content: prompt,
                   status: "error",
+                  createdAt: timestamp,
                   errorMessage: message,
-                };
+                }
+              ),
+              assistantMessageId,
+              {
+                id: assistantMessageId,
+                conversationId,
+                role: "assistant",
+                content: "I couldn't save that message to the conversation.",
+                status: "error",
+                createdAt: timestamp,
+                errorMessage: message,
               }
-
-              if (item.id === assistantMessageId) {
-                return {
-                  ...item,
-                  content: "I couldn't save that message to the conversation.",
-                  status: "error",
-                  errorMessage: message,
-                };
-              }
-
-              return item;
-            }),
+            ),
           },
         }));
 
         return;
       }
 
-      await new Promise((resolve) => window.setTimeout(resolve, 950));
-
-      const reply = getMockAssistantReply(prompt);
-      const isError = reply.length === 0;
-
       try {
-        const persistedAssistantMessage = await appendChatMessage(conversationId, {
-          role: "assistant",
-          content: isError
-            ? "I couldn't complete that mock request. Try asking again or narrow the scope."
-            : reply,
-          status: isError ? "error" : "done",
-        });
+        let receivedFirstChunk = false;
 
-        set((current) => ({
-          isSubmitting: false,
-          isStreaming: false,
-          conversations: upsertConversation(current.conversations, persistedAssistantMessage.conversation),
-          messagesByConversation: {
-            ...current.messagesByConversation,
-            [conversationId]: (current.messagesByConversation[conversationId] ?? []).map((message) =>
-              message.id === assistantMessageId
-                ? {
-                    ...persistedAssistantMessage.item,
-                    errorMessage: isError
-                      ? "Mock request failed before a backend response was available."
-                      : undefined,
-                  }
-                : message
-            ),
-          },
-        }));
+        await streamAssistantMessage(
+          conversationId,
+          { prompt },
+          {
+            onChunk: ({ content }) => {
+              receivedFirstChunk = true;
+
+              set((current) => ({
+                messagesByConversation: {
+                  ...current.messagesByConversation,
+                  [conversationId]: replaceMessageOrAppend(
+                    current.messagesByConversation[conversationId] ?? [],
+                    assistantMessageId,
+                    buildLocalAssistantMessage({
+                      id: assistantMessageId,
+                      conversationId,
+                      createdAt: timestamp,
+                      content,
+                      status: "streaming",
+                    })
+                  ),
+                },
+              }));
+            },
+            onDone: ({ item, conversation }) => {
+              set((current) => ({
+                isSubmitting: false,
+                isStreaming: false,
+                conversations: upsertConversation(current.conversations, conversation),
+                messagesByConversation: {
+                  ...current.messagesByConversation,
+                  [conversationId]: replaceMessageOrAppend(
+                    current.messagesByConversation[conversationId] ?? [],
+                    assistantMessageId,
+                    buildLocalAssistantMessage({
+                      id: assistantMessageId,
+                      conversationId,
+                      createdAt: timestamp,
+                      content: item.content,
+                      status: item.status,
+                      errorMessage: item.errorMessage,
+                    })
+                  ),
+                },
+              }));
+            },
+          }
+        );
+
+        if (!receivedFirstChunk) {
+          set((current) => ({
+            messagesByConversation: {
+              ...current.messagesByConversation,
+              [conversationId]: replaceMessageOrAppend(
+                current.messagesByConversation[conversationId] ?? [],
+                assistantMessageId,
+                buildLocalAssistantMessage({
+                  id: assistantMessageId,
+                  conversationId,
+                  createdAt: timestamp,
+                  content: "",
+                  status: "streaming",
+                })
+              ),
+            },
+          }));
+        }
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Assistant response could not be saved.";
@@ -494,15 +578,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
           isStreaming: false,
           messagesByConversation: {
             ...current.messagesByConversation,
-            [conversationId]: (current.messagesByConversation[conversationId] ?? []).map((item) =>
-              item.id === assistantMessageId
-                ? {
-                    ...item,
-                    content: "I couldn't save the assistant response.",
-                    status: "error",
-                    errorMessage: message,
-                  }
-                : item
+            [conversationId]: replaceMessageOrAppend(
+              current.messagesByConversation[conversationId] ?? [],
+              assistantMessageId,
+              {
+                id: assistantMessageId,
+                conversationId,
+                role: "assistant",
+                content: "I couldn't save the assistant response.",
+                status: "error",
+                createdAt: timestamp,
+                errorMessage: message,
+              }
             ),
           },
         }));
