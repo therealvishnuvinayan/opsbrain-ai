@@ -94,6 +94,18 @@ interface OpenAIChatCompletionResponse {
   }>;
 }
 
+const INVALID_ORDER_ID_TOKENS = new Set([
+  "order",
+  "orders",
+  "id",
+  "number",
+  "details",
+  "detail",
+  "status",
+  "cards",
+  "card",
+]);
+
 function startOfDay(date: Date) {
   const next = new Date(date);
   next.setHours(0, 0, 0, 0);
@@ -184,12 +196,56 @@ function buildTrendWindow(days: number) {
   };
 }
 
+function normalizeCandidateOrderId(value?: string | null) {
+  if (!value) {
+    return undefined;
+  }
+
+  const normalized = value.trim().replace(/[.,!?]+$/, "");
+
+  if (!normalized) {
+    return undefined;
+  }
+
+  if (INVALID_ORDER_ID_TOKENS.has(normalized.toLowerCase())) {
+    return undefined;
+  }
+
+  return normalized;
+}
+
+function extractOrderId(question: string) {
+  const explicitPatterns = [
+    /\border\s+(?:id|number|no\.?)\s*[:#-]?\s*([a-z0-9-]{3,})\b/i,
+    /\border\s+details\s+for\s+([a-z0-9-]{3,})\b/i,
+    /\bstatus\s+of\s+order\s+([a-z0-9-]{3,})\b/i,
+    /\bshow\s+order\s+([a-z0-9-]{3,})\b/i,
+    /\bcards\s+for\s+order\s+([a-z0-9-]{3,})\b/i,
+  ];
+
+  for (const pattern of explicitPatterns) {
+    const match = question.match(pattern);
+    const candidate = normalizeCandidateOrderId(match?.[1]);
+
+    if (candidate) {
+      return candidate;
+    }
+  }
+
+  const orderNumberMatch = question.match(/\b(O-\d{3,})\b/i);
+  if (orderNumberMatch?.[1]) {
+    return orderNumberMatch[1];
+  }
+
+  const bareIdMatch = question.match(/\b(\d{3,}|[a-z0-9]{8,})\b/i);
+  const candidate = normalizeCandidateOrderId(bareIdMatch?.[1]);
+
+  return candidate;
+}
+
 function parseQuestionIntent(question: string): QueryIntent {
   const normalized = question.trim().toLowerCase();
-  const orderIdMatch =
-    question.match(/\border\s*(?:id|number|no\.?)?\s*[:#-]?\s*([a-z0-9-]{3,})\b/i) ??
-    (normalized.includes("order") ? question.match(/\b([0-9]{3,}|[a-z0-9]{8,})\b/i) : null);
-  const orderId = orderIdMatch?.[1];
+  const orderId = normalized.includes("order") ? extractOrderId(question) : undefined;
   const asksForHistory =
     normalized.includes("recent order") ||
     normalized.includes("order history") ||
