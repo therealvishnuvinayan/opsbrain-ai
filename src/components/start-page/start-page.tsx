@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, CSSProperties, Dispatch, ReactNode, SetStateAction } from "react";
 import { DM_Sans } from "next/font/google";
+import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import {
   Activity,
@@ -31,8 +32,8 @@ import {
 
 import { transcribeOpsBrainAudio } from "@/features/operations/api";
 import { ChatShell } from "@/components/chat/ChatShell";
-import { useChatStore } from "@/lib/chat/chat.store";
-import { formatRelativeTime } from "@/lib/chat/chat.utils";
+import { DRAFT_CONVERSATION_ID, useChatStore } from "@/lib/chat/chat.store";
+import { formatRelativeTime, getVisibleHistoryConversations } from "@/lib/chat/chat.utils";
 import { cn } from "@/lib/utils";
 
 const dmSans = DM_Sans({
@@ -980,9 +981,10 @@ function PromptComposer({
 }
 
 function RecentChatCard() {
+  const router = useRouter();
   const conversations = useChatStore((state) => state.conversations);
   const setActiveConversation = useChatStore((state) => state.setActiveConversation);
-  const recentConversation = conversations[0];
+  const recentConversation = getVisibleHistoryConversations(conversations)[0];
 
   if (!recentConversation) {
     return (
@@ -999,6 +1001,7 @@ function RecentChatCard() {
       type="button"
       onClick={() => {
         void setActiveConversation(recentConversation.id);
+        router.push(`/ai/thread/${recentConversation.id}`);
       }}
       className="max-w-[304px] rounded-[14px] border border-[var(--start-border)] bg-[var(--start-card-bg)] px-[14px] py-[13px] text-left shadow-[var(--start-card-shadow)] transition-all dark:hover:-translate-y-0.5 dark:hover:shadow-[0_0_22px_rgba(139,92,246,0.14)]"
     >
@@ -1077,10 +1080,21 @@ function SuggestionIllustration({
   );
 }
 
-export function StartPage({ userFirstName }: { userFirstName?: string | null }) {
+export function StartPage({
+  userFirstName,
+  threadConversationId,
+}: {
+  userFirstName?: string | null;
+  threadConversationId?: string | null;
+}) {
   const [inputValue, setInputValue] = useState("");
+  const router = useRouter();
+  const activeConversationId = useChatStore((state) => state.activeConversationId);
+  const messagesByConversation = useChatStore((state) => state.messagesByConversation);
   const viewMode = useChatStore((state) => state.viewMode);
   const initialize = useChatStore((state) => state.initialize);
+  const openDraftConversation = useChatStore((state) => state.openDraftConversation);
+  const setActiveConversation = useChatStore((state) => state.setActiveConversation);
   const sendMockMessage = useChatStore((state) => state.sendMockMessage);
   const welcomeTitle = userFirstName ? `Welcome back, ${userFirstName}` : "Welcome back";
 
@@ -1088,7 +1102,31 @@ export function StartPage({ userFirstName }: { userFirstName?: string | null }) 
     void initialize();
   }, [initialize]);
 
-  if (viewMode === "thread") {
+  useEffect(() => {
+    if (!threadConversationId) {
+      return;
+    }
+
+    if (threadConversationId === "new") {
+      if (activeConversationId === DRAFT_CONVERSATION_ID) {
+        return;
+      }
+
+      openDraftConversation();
+      return;
+    }
+
+    if (
+      activeConversationId === threadConversationId &&
+      (messagesByConversation[threadConversationId]?.length ?? 0) > 0
+    ) {
+      return;
+    }
+
+    void setActiveConversation(threadConversationId);
+  }, [threadConversationId, openDraftConversation, setActiveConversation]);
+
+  if (threadConversationId) {
     return (
       <div
         style={pageTheme}
@@ -1097,7 +1135,13 @@ export function StartPage({ userFirstName }: { userFirstName?: string | null }) 
           "relative mx-auto h-full w-full max-w-none font-[family:var(--font-start-page)] dark:[--start-border:rgba(255,255,255,0.12)] dark:[--start-border-soft:rgba(255,255,255,0.08)]"
         )}
       >
-        <ChatShell />
+        <ChatShell
+          forceLoading={
+            threadConversationId !== "new" &&
+            activeConversationId !== threadConversationId &&
+            viewMode !== "home"
+          }
+        />
       </div>
     );
   }
@@ -1163,7 +1207,10 @@ export function StartPage({ userFirstName }: { userFirstName?: string | null }) 
                 onInputChange={setInputValue}
                 onPromptSelect={setInputValue}
                 onSubmitPrompt={async (prompt) => {
-                  await sendMockMessage(prompt);
+                  const conversationId = await sendMockMessage(prompt);
+                  if (conversationId) {
+                    router.push(`/ai/thread/${conversationId}`);
+                  }
                   setInputValue("");
                 }}
               />

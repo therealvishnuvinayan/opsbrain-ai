@@ -2,11 +2,14 @@
 
 import { useRef } from "react";
 import { Plus, SendHorizontal } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
 
 import { useChatStore } from "@/lib/chat/chat.store";
 import { cn } from "@/lib/utils";
 
 export function Composer() {
+  const router = useRouter();
+  const pathname = usePathname();
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const input = useChatStore((state) => state.input);
   const isSubmitting = useChatStore((state) => state.isSubmitting);
@@ -14,7 +17,10 @@ export function Composer() {
   const sendMockMessage = useChatStore((state) => state.sendMockMessage);
 
   const submit = async () => {
-    await sendMockMessage();
+    const conversationId = await sendMockMessage();
+    if (conversationId && pathname === "/ai/thread/new") {
+      router.replace(`/ai/thread/${conversationId}`);
+    }
     requestAnimationFrame(() => textareaRef.current?.focus());
   };
 

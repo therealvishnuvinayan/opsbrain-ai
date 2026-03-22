@@ -19,6 +19,15 @@ export function sortConversationsByLastUsed(conversations: ChatConversation[]) {
   );
 }
 
+export function getVisibleHistoryConversations(
+  conversations: ChatConversation[],
+  activeConversationId?: string | null
+) {
+  return conversations.filter(
+    (conversation) => conversation.messageCount > 0 || conversation.id === activeConversationId
+  );
+}
+
 export function groupConversationsByRecency(conversations: ChatConversation[]) {
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());

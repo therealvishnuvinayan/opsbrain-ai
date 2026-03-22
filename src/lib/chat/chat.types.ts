@@ -17,4 +17,5 @@ export interface ChatConversation {
   title: string;
   createdAt: string;
   lastUsedAt: string;
+  messageCount: number;
 }

@@ -16,6 +16,9 @@ interface ChatConversationRecord {
   updatedAt: Date;
   lastUsedAt: Date;
   messages?: ChatMessageRecord[];
+  _count?: {
+    messages: number;
+  };
 }
 
 interface ChatMessageRecord {
@@ -76,6 +79,7 @@ export function mapConversation(
     title: conversation.title,
     createdAt: conversation.createdAt.toISOString(),
     lastUsedAt: conversation.lastUsedAt.toISOString(),
+    messageCount: conversation._count?.messages ?? conversation.messages?.length ?? 0,
   };
 }
 
@@ -126,6 +130,13 @@ export async function resolveChatUser(session: Session) {
 export async function listChatConversationsForUser(userId: string) {
   const conversations = await chatPrisma.chatConversation.findMany({
     where: { userId },
+    include: {
+      _count: {
+        select: {
+          messages: true,
+        },
+      },
+    },
     orderBy: [{ lastUsedAt: "desc" }, { createdAt: "desc" }],
   });
 

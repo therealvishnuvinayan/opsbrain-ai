@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowLeft } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 import { Composer } from "@/components/chat/Composer";
 import { EmptyState } from "@/components/chat/EmptyState";
@@ -8,7 +9,8 @@ import { MessageList } from "@/components/chat/MessageList";
 import { TypingIndicator } from "@/components/chat/TypingIndicator";
 import { useChatStore } from "@/lib/chat/chat.store";
 
-export function ChatShell() {
+export function ChatShell({ forceLoading = false }: { forceLoading?: boolean }) {
+  const router = useRouter();
   const activeConversationId = useChatStore((state) => state.activeConversationId);
   const conversations = useChatStore((state) => state.conversations);
   const messagesByConversation = useChatStore((state) => state.messagesByConversation);
@@ -26,7 +28,10 @@ export function ChatShell() {
         <div className="mx-auto flex max-w-[920px] items-center gap-3 rounded-[22px] border border-[rgba(221,225,233,0.9)] bg-white/95 px-4 py-3 shadow-[0_18px_34px_-34px_rgba(15,23,42,0.12)] dark:border-white/[0.06] dark:bg-[rgba(20,19,28,0.88)] dark:shadow-[0_16px_34px_-30px_rgba(8,10,22,0.7)]">
           <button
             type="button"
-            onClick={goHome}
+            onClick={() => {
+              goHome();
+              router.push("/ai");
+            }}
             className="flex h-9 w-9 items-center justify-center rounded-full border border-[rgba(219,223,235,0.9)] bg-white/92 text-[#3a3d49] transition-colors hover:bg-white dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-white/[0.82] dark:hover:bg-white/[0.06]"
             aria-label="Back to home"
           >
@@ -40,7 +45,7 @@ export function ChatShell() {
         </div>
       </div>
 
-      {isLoadingConversation && messages.length === 0 ? (
+      {forceLoading || (isLoadingConversation && messages.length === 0) ? (
         <div className="flex flex-1 items-center justify-center px-4">
           <TypingIndicator />
         </div>

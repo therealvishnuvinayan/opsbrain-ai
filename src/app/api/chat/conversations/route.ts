@@ -21,6 +21,9 @@ const chatPrisma = prisma as typeof prisma & {
       createdAt: Date;
       updatedAt: Date;
       lastUsedAt: Date;
+      _count: {
+        messages: number;
+      };
     }>;
   };
 };
@@ -69,6 +72,13 @@ export async function POST(request: Request) {
     data: {
       userId: user.id,
       title,
+    },
+    include: {
+      _count: {
+        select: {
+          messages: true,
+        },
+      },
     },
   });
 

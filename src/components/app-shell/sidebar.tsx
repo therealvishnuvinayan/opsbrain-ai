@@ -22,7 +22,7 @@ import {
 } from "@/components/app-shell/sidebar-nav";
 import { Button } from "@/components/ui/button";
 import { useChatStore } from "@/lib/chat/chat.store";
-import { groupConversationsByRecency } from "@/lib/chat/chat.utils";
+import { getVisibleHistoryConversations, groupConversationsByRecency } from "@/lib/chat/chat.utils";
 import { applyTheme, getInitialTheme, THEME_STORAGE_KEY, type AppTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
@@ -133,11 +133,16 @@ export function Sidebar({ collapsed, onToggle, variant = "default" }: SidebarPro
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
   const prefetchedRef = useRef<Set<string>>(new Set());
   const conversations = useChatStore((state) => state.conversations);
-  const activeConversationId = useChatStore((state) => state.activeConversationId);
   const initialize = useChatStore((state) => state.initialize);
-  const createConversation = useChatStore((state) => state.createConversation);
+  const openDraftConversation = useChatStore((state) => state.openDraftConversation);
   const setActiveConversation = useChatStore((state) => state.setActiveConversation);
-  const groupedConversations = groupConversationsByRecency(conversations);
+  const routeConversationId = pathname.startsWith("/ai/thread/")
+    ? pathname.split("/ai/thread/")[1]?.split("/")[0] ?? null
+    : null;
+  const selectedConversationId = routeConversationId && routeConversationId !== "new" ? routeConversationId : null;
+  const groupedConversations = groupConversationsByRecency(
+    getVisibleHistoryConversations(conversations, selectedConversationId)
+  );
 
   const prefetchHref = (href: string) => {
     if (prefetchedRef.current.has(href)) {
@@ -165,13 +170,10 @@ export function Sidebar({ collapsed, onToggle, variant = "default" }: SidebarPro
     window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
   };
 
-  const startNewChat = async () => {
-    try {
-      await createConversation("New chat");
-      setIsSidebarExpanded(true);
-    } catch {
-      setIsSidebarExpanded(true);
-    }
+  const startNewChat = () => {
+    openDraftConversation();
+    setIsSidebarExpanded(true);
+    router.push("/ai/thread/new");
   };
 
   if (variant === "canva") {
@@ -207,7 +209,7 @@ export function Sidebar({ collapsed, onToggle, variant = "default" }: SidebarPro
               </div>
 
               <Link
-                href="/"
+                href="/ai"
                 className="flex h-10 w-10 items-center justify-center rounded-[18px] border border-[rgba(232,226,243,0.92)] bg-white/92 text-[#765cff] shadow-[0_10px_20px_-20px_rgba(113,88,255,0.28)] dark:border-white/8 dark:bg-white/[0.03] dark:text-white"
                 aria-label="Bamboo AI home"
               >
@@ -229,7 +231,7 @@ export function Sidebar({ collapsed, onToggle, variant = "default" }: SidebarPro
             <button
               type="button"
               onClick={() => {
-                void startNewChat();
+                startNewChat();
               }}
               className="mt-2 flex h-10 w-10 items-center justify-center rounded-[18px] bg-[linear-gradient(135deg,#7c3aed_0%,#9f67ff_100%)] text-white shadow-[0_16px_28px_-20px_rgba(124,58,237,0.58)] transition-transform hover:scale-[1.02] dark:shadow-[0_16px_28px_-18px_rgba(124,58,237,0.72)]"
               aria-label="Start new chat"
@@ -288,7 +290,7 @@ export function Sidebar({ collapsed, onToggle, variant = "default" }: SidebarPro
               <button
                 type="button"
                 onClick={() => {
-                  void startNewChat();
+                  startNewChat();
                 }}
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-[16px] bg-[linear-gradient(135deg,#7c3aed_0%,#9f67ff_100%)] px-4 text-[14px] font-semibold text-white shadow-[0_18px_28px_-20px_rgba(124,58,237,0.56)] transition-transform hover:scale-[1.01] dark:shadow-[0_18px_30px_-18px_rgba(124,58,237,0.66)]"
               >
@@ -312,7 +314,7 @@ export function Sidebar({ collapsed, onToggle, variant = "default" }: SidebarPro
                         <button
                           type="button"
                           onClick={() => {
-                            void startNewChat();
+                            startNewChat();
                           }}
                           className="flex h-7 w-7 items-center justify-center rounded-full text-[#7a7593] transition-colors hover:bg-white/80 hover:text-[#4e4966] dark:text-white/[0.54] dark:hover:bg-white/[0.05] dark:hover:text-white/[0.88]"
                           aria-label={`New chat in ${group.toLowerCase()}`}
@@ -323,7 +325,7 @@ export function Sidebar({ collapsed, onToggle, variant = "default" }: SidebarPro
 
                       <div className="space-y-1">
                         {groupItems.map((item) => {
-                          const isActive = activeConversationId === item.id;
+                          const isActive = selectedConversationId === item.id;
 
                           return (
                             <button
@@ -331,7 +333,7 @@ export function Sidebar({ collapsed, onToggle, variant = "default" }: SidebarPro
                               type="button"
                               onClick={() => {
                                 void setActiveConversation(item.id);
-                                router.push("/");
+                                router.push(`/ai/thread/${item.id}`);
                               }}
                               className={cn(
                                 "flex w-full items-center gap-3 rounded-[16px] px-3 py-2.5 text-left transition-colors",
