@@ -22,17 +22,17 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
   const googleEnabled = isGoogleOAuthConfigured;
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_14%_20%,rgba(99,132,255,0.3),transparent_38%),radial-gradient(circle_at_88%_85%,rgba(38,63,120,0.28),transparent_44%),linear-gradient(180deg,#040712_0%,#0A1224_42%,#0A1328_100%)]" />
-      <div className="absolute inset-0 bg-soft-grid [background-size:28px_28px] opacity-20" />
-      <div className="absolute -left-16 top-1/3 h-48 w-48 rounded-full bg-blue-500/10 blur-3xl" />
-      <div className="absolute -right-20 bottom-1/4 h-64 w-64 rounded-full bg-slate-400/10 blur-3xl" />
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[linear-gradient(180deg,#ffffff_0%,#f7f8ff_48%,#eef2ff_100%)] px-4 py-10 sm:px-6">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(129,140,248,0.18),transparent_28%),radial-gradient(circle_at_80%_18%,rgba(56,189,248,0.14),transparent_24%),radial-gradient(circle_at_50%_100%,rgba(236,72,153,0.08),transparent_30%)]" />
+      <div className="absolute left-[-6rem] top-[12%] h-64 w-64 rounded-full bg-indigo-200/40 blur-3xl" />
+      <div className="absolute right-[-5rem] top-[18%] h-72 w-72 rounded-full bg-sky-200/35 blur-3xl" />
+      <div className="absolute bottom-[-7rem] left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-fuchsia-100/35 blur-3xl" />
 
-      <div className="relative z-10 w-full max-w-md">
+      <div className="relative z-10 w-full max-w-[420px]">
         <AuthCard
           mode="register"
           title="Create account"
-          description="Provision your secure workspace and start investigating operational risk."
+          description="Create your workspace and start managing operations with AI"
         >
           <RegisterForm callbackUrl={callbackUrl} googleEnabled={googleEnabled} />
         </AuthCard>

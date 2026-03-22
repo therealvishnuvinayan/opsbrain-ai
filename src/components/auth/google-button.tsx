@@ -72,7 +72,7 @@ export function GoogleButton({ callbackUrl, className, disabled }: GoogleButtonP
         type="button"
         variant="outline"
         className={cn(
-          "h-11 w-full border-white/20 bg-white/[0.03] text-slate-100 hover:bg-white/[0.08] hover:text-slate-50",
+          "h-14 w-full rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-[0_12px_30px_-22px_rgba(15,23,42,0.45)] transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:bg-white hover:text-slate-900 hover:shadow-[0_18px_40px_-22px_rgba(79,70,229,0.22)]",
           className
         )}
         disabled={isLoading || disabled}
@@ -84,7 +84,7 @@ export function GoogleButton({ callbackUrl, className, disabled }: GoogleButtonP
           <svg
             xmlns="http://www.w3.org/2000/svg"
             viewBox="0 0 48 48"
-            className="h-4 w-4"
+            className="h-5 w-5"
             aria-hidden
           >
             <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.6 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 8 3l5.7-5.7C34.2 6.1 29.4 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.2-.1-2.3-.4-3.5z" />
@@ -93,11 +93,14 @@ export function GoogleButton({ callbackUrl, className, disabled }: GoogleButtonP
             <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-1.1 3.1-3.3 5.5-6.2 7l6.2 5.2C35 40 44 34 44 24c0-1.2-.1-2.3-.4-3.5z" />
           </svg>
         )}
-        Continue with Google
+        <span className="text-sm font-medium">Continue with Google</span>
       </Button>
 
       {error ? (
-        <Alert variant="destructive" className="border-red-400/35 bg-red-500/10 text-red-200">
+        <Alert
+          variant="destructive"
+          className="border-red-200 bg-red-50 text-red-600 shadow-[0_10px_24px_-18px_rgba(239,68,68,0.6)]"
+        >
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
