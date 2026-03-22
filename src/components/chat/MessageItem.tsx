@@ -2,6 +2,7 @@
 
 import type { ChatMessage } from "@/lib/chat/chat.types";
 import { cn } from "@/lib/utils";
+import { formatMessageWithStatusColors } from "@/lib/format-message";
 import { TypingIndicator } from "@/components/chat/TypingIndicator";
 
 export function MessageItem({ message }: { message: ChatMessage }) {
@@ -26,7 +27,7 @@ export function MessageItem({ message }: { message: ChatMessage }) {
           <TypingIndicator />
         ) : (
           <p className="whitespace-pre-wrap break-words">
-            {message.content}
+            {formatMessageWithStatusColors(message.content)}
             {isStreaming ? (
               <span className="ml-0.5 inline-block h-[1.05em] w-[2px] animate-pulse rounded-full bg-current/45 align-[-0.15em]" />
             ) : null}

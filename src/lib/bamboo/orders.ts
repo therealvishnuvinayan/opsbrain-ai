@@ -42,6 +42,12 @@ export interface NormalizedOrderHistory {
   totalCount?: number;
   returnedCount: number;
   statuses: Record<string, number>;
+  dominantStatus?: string;
+  dominantStatusShare?: number;
+  failureRateInReturnedSample?: number;
+  issueOrderIds: string[];
+  hasConcentratedFailures: boolean;
+  hasMixedStatuses: boolean;
   notableIssues: string[];
   orders: NormalizedOrderSummary[];
 }
@@ -58,6 +64,9 @@ export interface NormalizedOrderDetail {
   itemCount?: number;
   cardCount?: number;
   cardStatusCounts: Record<string, number>;
+  problematicCardStatuses: string[];
+  problematicItemStatuses: string[];
+  missingCards: boolean;
   notableIssues: string[];
   items: Array<{
     id: string;
@@ -134,6 +143,17 @@ function firstRecordArray(record: Record<string, unknown>, keys: string[]) {
 
 function normalizeStatus(value: string | undefined) {
   return value?.trim() || "unknown";
+}
+
+function getDominantStatus(statuses: Record<string, number>) {
+  const entries = Object.entries(statuses).sort((left, right) => right[1] - left[1]);
+
+  if (entries.length === 0) {
+    return undefined;
+  }
+
+  const [status, count] = entries[0];
+  return { status, count };
 }
 
 function isIssueStatus(status: string) {
@@ -215,6 +235,21 @@ function normalizeHistoryPayload(raw: unknown, filters: OrderHistoryFilters): No
   const notableIssues = normalizedOrders.flatMap((order) =>
     order.notableIssues.map((issue) => `${order.orderNumber}: ${issue}`)
   );
+  const dominantStatusEntry = getDominantStatus(statuses);
+  const failedCount = Object.entries(statuses).reduce((total, [status, count]) => {
+    return isIssueStatus(status) && status.toLowerCase().includes("fail") ? total + count : total;
+  }, 0);
+  const issueOrderIds = normalizedOrders
+    .filter((order) => order.notableIssues.length > 0 || isIssueStatus(order.status))
+    .map((order) => order.orderNumber)
+    .slice(0, 5);
+  const dominantStatusShare =
+    dominantStatusEntry && normalizedOrders.length > 0
+      ? dominantStatusEntry.count / normalizedOrders.length
+      : undefined;
+  const hasConcentratedFailures =
+    normalizedOrders.length > 0 && failedCount / normalizedOrders.length >= 0.6;
+  const hasMixedStatuses = Object.keys(statuses).length > 1;
 
   if (normalizedOrders.length === 0) {
     console.info("Bamboo order history normalization returned no orders", {
@@ -236,6 +271,13 @@ function normalizeHistoryPayload(raw: unknown, filters: OrderHistoryFilters): No
     totalCount: getNumber(root, ["totalCount", "total", "count", "recordsTotal"]),
     returnedCount: normalizedOrders.length,
     statuses,
+    dominantStatus: dominantStatusEntry?.status,
+    dominantStatusShare,
+    failureRateInReturnedSample:
+      normalizedOrders.length > 0 ? failedCount / normalizedOrders.length : undefined,
+    issueOrderIds,
+    hasConcentratedFailures,
+    hasMixedStatuses,
     notableIssues: notableIssues.slice(0, 8),
     orders: normalizedOrders.slice(0, filters.PageSize ?? 10),
   };
@@ -357,16 +399,25 @@ export async function getOrderDetails(orderId: string) {
     billingResult.status === "fulfilled" ? normalizeBilling(billingResult.value) : undefined;
   const baseOrder = normalizeOrderSummary(detailRecord);
   const notableIssues = [...baseOrder.notableIssues];
+  const problematicCardStatuses = Object.keys(cardStatusCounts).filter((status) => isIssueStatus(status));
+  const problematicItemStatuses = Array.from(
+    new Set(
+      items
+        .map((item) => item.status)
+        .filter((status): status is string => Boolean(status && isIssueStatus(status)))
+    )
+  );
+  const missingCards = cards.length === 0 && items.length > 0;
 
-  if (Object.keys(cardStatusCounts).some((status) => isIssueStatus(status))) {
+  if (problematicCardStatuses.length > 0) {
     notableIssues.push("One or more cards are in a non-happy status.");
   }
 
-  if (items.some((item) => item.status && isIssueStatus(item.status))) {
+  if (problematicItemStatuses.length > 0) {
     notableIssues.push("One or more order items are in a problematic state.");
   }
 
-  if (cards.length === 0 && items.length > 0) {
+  if (missingCards) {
     notableIssues.push("No cards were returned for this order.");
   }
 
@@ -383,6 +434,9 @@ export async function getOrderDetails(orderId: string) {
       itemCount: baseOrder.itemCount ?? items.length,
       cardCount: baseOrder.cardCount ?? cards.length,
       cardStatusCounts,
+      problematicCardStatuses,
+      problematicItemStatuses,
+      missingCards,
       notableIssues,
       items: items.slice(0, 12),
       cards: cards.slice(0, 12),
