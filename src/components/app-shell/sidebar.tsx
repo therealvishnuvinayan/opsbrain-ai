@@ -4,11 +4,13 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
+import { signOut, useSession } from "next-auth/react";
 import {
   Bot,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  LogOut,
   Menu,
   MessageSquareText,
   Moon,
@@ -20,6 +22,7 @@ import {
   dashboardNavItem,
   type SidebarNavItem,
 } from "@/components/app-shell/sidebar-nav";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useChatStore } from "@/lib/chat/chat.store";
 import { getVisibleHistoryConversations, groupConversationsByRecency } from "@/lib/chat/chat.utils";
@@ -81,6 +84,17 @@ function NavLinkItem({
 
 const canvaRailItems: SidebarNavItem[] = [dashboardNavItem];
 
+function getInitials(value: string) {
+  const initials = value
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+
+  return initials || "OB";
+}
+
 function CanvaRailItem({
   item,
   pathname,
@@ -128,9 +142,12 @@ function CanvaRailItem({
 export function Sidebar({ collapsed, onToggle, variant = "default" }: SidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const { data: session } = useSession();
   const [theme, setTheme] = useState<AppTheme>("light");
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [avatarImageFailed, setAvatarImageFailed] = useState(false);
   const prefetchedRef = useRef<Set<string>>(new Set());
   const conversations = useChatStore((state) => state.conversations);
   const initialize = useChatStore((state) => state.initialize);
@@ -143,6 +160,11 @@ export function Sidebar({ collapsed, onToggle, variant = "default" }: SidebarPro
   const groupedConversations = groupConversationsByRecency(
     getVisibleHistoryConversations(conversations, selectedConversationId)
   );
+  const displayName = session?.user?.name?.trim() || "Ops Operator";
+  const displayEmail = session?.user?.email || "Authenticated session";
+  const avatarImage = session?.user?.image?.trim() || "";
+  const showAvatarImage = avatarImage.length > 0 && !avatarImageFailed;
+  const initials = getInitials(displayName);
 
   const prefetchHref = (href: string) => {
     if (prefetchedRef.current.has(href)) {
@@ -160,6 +182,10 @@ export function Sidebar({ collapsed, onToggle, variant = "default" }: SidebarPro
   }, []);
 
   useEffect(() => {
+    setAvatarImageFailed(false);
+  }, [avatarImage]);
+
+  useEffect(() => {
     void initialize();
   }, [initialize]);
 
@@ -174,6 +200,15 @@ export function Sidebar({ collapsed, onToggle, variant = "default" }: SidebarPro
     openDraftConversation();
     setIsSidebarExpanded(true);
     router.push("/ai/thread/new");
+  };
+
+  const handleSignOut = async () => {
+    try {
+      setIsSigningOut(true);
+      await signOut({ callbackUrl: "/auth/login" });
+    } finally {
+      setIsSigningOut(false);
+    }
   };
 
   if (variant === "canva") {
@@ -240,6 +275,7 @@ export function Sidebar({ collapsed, onToggle, variant = "default" }: SidebarPro
             </button>
 
             <div className="mt-auto flex flex-col items-center gap-2 pb-1">
+              {/* Theme toggle hidden for now.
               <button
                 type="button"
                 onClick={toggleTheme}
@@ -252,8 +288,48 @@ export function Sidebar({ collapsed, onToggle, variant = "default" }: SidebarPro
                   <Sun className="h-[17px] w-[17px]" />
                 )}
               </button>
+              */}
               <span className="h-2 w-2 rounded-full bg-emerald-500/90" aria-hidden />
-              <div className="h-9 w-9 rounded-full border border-[rgba(232,226,243,0.88)] bg-[linear-gradient(135deg,#ffe1c6,#fff8ed)] dark:border-white/10 dark:bg-[linear-gradient(135deg,#2a2237,#15131f)]" />
+              <details className="relative">
+                <summary className="flex list-none cursor-pointer items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#765cff]/35">
+                  <span className="sr-only">Open profile menu</span>
+                  <Avatar className="h-9 w-9 border border-[rgba(232,226,243,0.88)] bg-[linear-gradient(135deg,#ffe1c6,#fff8ed)] dark:border-white/10 dark:bg-[linear-gradient(135deg,#2a2237,#15131f)]">
+                    {showAvatarImage ? (
+                      <AvatarImage
+                        src={avatarImage}
+                        alt={displayName}
+                        onError={() => setAvatarImageFailed(true)}
+                      />
+                    ) : null}
+                    {!showAvatarImage ? (
+                      <AvatarFallback className="bg-transparent text-[12px] font-semibold text-[#5d506f] dark:text-white/[0.9]">
+                        {initials}
+                      </AvatarFallback>
+                    ) : null}
+                  </Avatar>
+                </summary>
+                <div className="absolute bottom-0 left-[calc(100%+12px)] z-50 w-56 rounded-[18px] border border-[rgba(231,226,243,0.9)] bg-white/95 p-1.5 shadow-[0_20px_40px_-28px_rgba(15,23,42,0.35)] dark:border-white/8 dark:bg-[rgba(24,21,34,0.98)]">
+                  <div className="rounded-[14px] px-3 py-2">
+                    <p className="truncate text-[13px] font-semibold text-[#2e2b3e] dark:text-white/[0.94]">
+                      {displayName}
+                    </p>
+                    <p className="truncate text-[11.5px] text-[#85809b] dark:text-white/[0.5]">
+                      {displayEmail}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleSignOut();
+                    }}
+                    disabled={isSigningOut}
+                    className="flex w-full items-center gap-2 rounded-[14px] px-3 py-2 text-left text-[13px] font-medium text-[#4d4960] transition-colors hover:bg-[rgba(248,244,252,0.98)] disabled:cursor-wait disabled:opacity-70 dark:text-white/[0.82] dark:hover:bg-white/[0.05]"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    {isSigningOut ? "Logging out..." : "Logout"}
+                  </button>
+                </div>
+              </details>
             </div>
           </div>
 
