@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShieldCheck } from "lucide-react";
+import { ShieldCheck, Sparkles } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -13,21 +13,27 @@ interface AuthCardProps {
 
 export function AuthCard({ mode, title, description, children }: AuthCardProps) {
   return (
-    <Card className="w-full border-white/15 bg-white/[0.06] text-slate-50 shadow-[0_25px_70px_-28px_rgba(15,23,42,0.85)] backdrop-blur-xl">
-      <CardHeader className="space-y-5 pb-5">
-        <div className="space-y-1">
-          <p className="text-xl font-semibold tracking-tight text-slate-100">OpsBrain AI</p>
-          <p className="text-sm text-slate-300/90">Operational Intelligence Layer</p>
+    <Card className="relative w-full overflow-hidden rounded-[26px] border border-white/70 bg-white/80 text-slate-900 shadow-[0_30px_80px_-34px_rgba(99,102,241,0.35)] backdrop-blur-xl">
+      <div className="absolute inset-x-0 top-0 h-24 bg-[linear-gradient(180deg,rgba(124,58,237,0.08),rgba(79,70,229,0))]" />
+      <CardHeader className="relative space-y-6 px-7 pb-6 pt-7 sm:px-8">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#a78bfa_0%,#6366f1_55%,#38bdf8_100%)] shadow-[0_16px_28px_-14px_rgba(99,102,241,0.7)]">
+            <Sparkles className="h-5 w-5 text-white" />
+          </div>
+          <div className="space-y-0.5">
+            <p className="text-base font-semibold tracking-tight text-slate-900">OpsBrain AI</p>
+            <p className="text-sm text-slate-500">Your AI-powered operations workspace</p>
+          </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-1 rounded-lg border border-white/12 bg-white/[0.02] p-1">
+        <div className="grid grid-cols-2 gap-1 rounded-2xl bg-slate-100/90 p-1">
           <Link
             href="/auth/login"
             className={cn(
-              "rounded-md px-3 py-2 text-center text-sm font-medium transition-colors",
+              "rounded-2xl px-3 py-2.5 text-center text-sm font-medium transition-all duration-200",
               mode === "login"
-                ? "bg-white/14 text-slate-100"
-                : "text-slate-300 hover:bg-white/8 hover:text-slate-100"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-500 hover:bg-white/70 hover:text-slate-800"
             )}
           >
             Sign in
@@ -35,30 +41,31 @@ export function AuthCard({ mode, title, description, children }: AuthCardProps) 
           <Link
             href="/auth/register"
             className={cn(
-              "rounded-md px-3 py-2 text-center text-sm font-medium transition-colors",
+              "rounded-2xl px-3 py-2.5 text-center text-sm font-medium transition-all duration-200",
               mode === "register"
-                ? "bg-white/14 text-slate-100"
-                : "text-slate-300 hover:bg-white/8 hover:text-slate-100"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-500 hover:bg-white/70 hover:text-slate-800"
             )}
           >
             Create account
           </Link>
         </div>
 
-        <div className="space-y-1">
-          <CardTitle className="text-2xl font-semibold text-slate-50">{title}</CardTitle>
-          <CardDescription className="text-slate-300/90">{description}</CardDescription>
+        <div className="space-y-2">
+          <CardTitle className="text-[1.75rem] font-semibold tracking-tight text-slate-900">
+            {title}
+          </CardTitle>
+          <CardDescription className="max-w-sm text-[15px] leading-6 text-slate-500">
+            {description}
+          </CardDescription>
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-4">
+      <CardContent className="relative space-y-5 px-7 pb-7 sm:px-8">
         {children}
-        <div className="flex items-start gap-2 rounded-lg border border-white/12 bg-white/[0.03] px-3 py-2 text-xs text-slate-300/95">
-          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-slate-200" />
-          <p>
-            Enterprise-grade security. Credentials are encrypted and scoped for operational
-            access only.
-          </p>
+        <div className="flex items-start gap-2 rounded-2xl bg-slate-50/90 px-4 py-3 text-xs text-slate-500">
+          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-indigo-500" />
+          <p>Your data is secure and encrypted</p>
         </div>
       </CardContent>
     </Card>
