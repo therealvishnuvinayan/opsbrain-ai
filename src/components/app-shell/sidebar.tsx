@@ -21,6 +21,8 @@ import {
   type SidebarNavItem,
 } from "@/components/app-shell/sidebar-nav";
 import { Button } from "@/components/ui/button";
+import { useChatStore } from "@/lib/chat/chat.store";
+import { groupConversationsByRecency } from "@/lib/chat/chat.utils";
 import { applyTheme, getInitialTheme, THEME_STORAGE_KEY, type AppTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
@@ -79,20 +81,6 @@ function NavLinkItem({
 
 const canvaRailItems: SidebarNavItem[] = [dashboardNavItem];
 
-type ChatHistoryItem = {
-  id: string;
-  title: string;
-  href: string;
-  group: "Today" | "Yesterday" | "Earlier";
-};
-
-const chatHistoryItems: ChatHistoryItem[] = [
-  { id: "chat-new", title: "New chat", href: "/", group: "Today" },
-  { id: "chat-supplier", title: "Supplier incident summary", href: "/", group: "Today" },
-  { id: "chat-random", title: "Random Text Input", href: "/", group: "Yesterday" },
-  { id: "chat-recon", title: "Reconciliation mismatch review", href: "/", group: "Earlier" },
-];
-
 function CanvaRailItem({
   item,
   pathname,
@@ -143,8 +131,12 @@ export function Sidebar({ collapsed, onToggle, variant = "default" }: SidebarPro
   const [theme, setTheme] = useState<AppTheme>("light");
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
-  const [activeChatId, setActiveChatId] = useState("chat-new");
   const prefetchedRef = useRef<Set<string>>(new Set());
+  const conversations = useChatStore((state) => state.conversations);
+  const activeConversationId = useChatStore((state) => state.activeConversationId);
+  const createConversation = useChatStore((state) => state.createConversation);
+  const setActiveConversation = useChatStore((state) => state.setActiveConversation);
+  const groupedConversations = groupConversationsByRecency(conversations);
 
   const prefetchHref = (href: string) => {
     if (prefetchedRef.current.has(href)) {
@@ -169,8 +161,8 @@ export function Sidebar({ collapsed, onToggle, variant = "default" }: SidebarPro
   };
 
   const startNewChat = () => {
-    setActiveChatId("chat-new");
-    window.dispatchEvent(new CustomEvent("opsbrain:start-new-chat"));
+    createConversation("New chat");
+    setIsSidebarExpanded(true);
   };
 
   if (variant === "canva") {
@@ -293,7 +285,7 @@ export function Sidebar({ collapsed, onToggle, variant = "default" }: SidebarPro
 
               <div className="mt-5 flex flex-1 flex-col overflow-hidden">
                 {(["Today", "Yesterday", "Earlier"] as const).map((group) => {
-                  const groupItems = chatHistoryItems.filter((item) => item.group === group);
+                  const groupItems = groupedConversations[group];
                   if (groupItems.length === 0) {
                     return null;
                   }
@@ -316,15 +308,15 @@ export function Sidebar({ collapsed, onToggle, variant = "default" }: SidebarPro
 
                       <div className="space-y-1">
                         {groupItems.map((item) => {
-                          const isActive = activeChatId === item.id;
+                          const isActive = activeConversationId === item.id;
 
                           return (
                             <button
                               key={item.id}
                               type="button"
                               onClick={() => {
-                                setActiveChatId(item.id);
-                                router.push(item.href);
+                                setActiveConversation(item.id);
+                                router.push("/");
                               }}
                               className={cn(
                                 "flex w-full items-center gap-3 rounded-[16px] px-3 py-2.5 text-left transition-colors",

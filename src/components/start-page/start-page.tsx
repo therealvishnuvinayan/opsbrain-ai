@@ -30,6 +30,8 @@ import {
 } from "lucide-react";
 
 import { transcribeOpsBrainAudio } from "@/features/operations/api";
+import { ChatShell } from "@/components/chat/ChatShell";
+import { useChatStore } from "@/lib/chat/chat.store";
 import { cn } from "@/lib/utils";
 
 const dmSans = DM_Sans({
@@ -387,10 +389,12 @@ function PromptComposer({
   inputValue,
   onInputChange,
   onPromptSelect,
+  onSubmitPrompt,
 }: {
   inputValue: string;
   onInputChange: (value: string) => void;
   onPromptSelect: (value: string) => void;
+  onSubmitPrompt?: (prompt: string) => Promise<void> | void;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const depthMenuRef = useRef<HTMLDivElement | null>(null);
@@ -549,9 +553,14 @@ function PromptComposer({
     focusComposer();
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const trimmedValue = inputValue.trim();
     if (!trimmedValue) {
+      return;
+    }
+
+    if (onSubmitPrompt) {
+      await onSubmitPrompt(trimmedValue);
       return;
     }
 
@@ -756,7 +765,7 @@ function PromptComposer({
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
-                handleSubmit();
+                void handleSubmit();
               }
             }}
             placeholder={composerPlaceholder}
@@ -837,7 +846,9 @@ function PromptComposer({
               tooltipId="send"
               activeTooltip={activeTooltip}
               onTooltipChange={setActiveTooltip}
-              onClick={handleSubmit}
+              onClick={() => {
+                void handleSubmit();
+              }}
               prominent
               disabled={!inputValue.trim()}
             />
@@ -1045,19 +1056,23 @@ function SuggestionIllustration({
 
 export function StartPage({ userFirstName }: { userFirstName?: string | null }) {
   const [inputValue, setInputValue] = useState("");
+  const viewMode = useChatStore((state) => state.viewMode);
+  const sendMockMessage = useChatStore((state) => state.sendMockMessage);
   const welcomeTitle = userFirstName ? `Welcome back, ${userFirstName}` : "Welcome back";
 
-  useEffect(() => {
-    const handleStartNewChat = () => {
-      setInputValue("");
-    };
-
-    window.addEventListener("opsbrain:start-new-chat", handleStartNewChat);
-
-    return () => {
-      window.removeEventListener("opsbrain:start-new-chat", handleStartNewChat);
-    };
-  }, []);
+  if (viewMode === "thread") {
+    return (
+      <div
+        style={pageTheme}
+        className={cn(
+          dmSans.variable,
+          "relative mx-auto h-full w-full max-w-none font-[family:var(--font-start-page)] dark:[--start-border:rgba(255,255,255,0.12)] dark:[--start-border-soft:rgba(255,255,255,0.08)]"
+        )}
+      >
+        <ChatShell />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -1119,6 +1134,10 @@ export function StartPage({ userFirstName }: { userFirstName?: string | null }) 
                 inputValue={inputValue}
                 onInputChange={setInputValue}
                 onPromptSelect={setInputValue}
+                onSubmitPrompt={async (prompt) => {
+                  await sendMockMessage(prompt);
+                  setInputValue("");
+                }}
               />
             </div>
           </div>
