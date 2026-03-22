@@ -1047,6 +1047,18 @@ export function StartPage({ userFirstName }: { userFirstName?: string | null }) 
   const [inputValue, setInputValue] = useState("");
   const welcomeTitle = userFirstName ? `Welcome back, ${userFirstName}` : "Welcome back";
 
+  useEffect(() => {
+    const handleStartNewChat = () => {
+      setInputValue("");
+    };
+
+    window.addEventListener("opsbrain:start-new-chat", handleStartNewChat);
+
+    return () => {
+      window.removeEventListener("opsbrain:start-new-chat", handleStartNewChat);
+    };
+  }, []);
+
   return (
     <div
       style={pageTheme}
