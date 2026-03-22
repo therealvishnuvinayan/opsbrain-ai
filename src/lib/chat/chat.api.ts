@@ -34,6 +34,8 @@ type AiStreamEvent =
   | { type: "done"; content: string; sources: Array<{ type: string; endpoint?: string }> }
   | { type: "error"; message: string };
 
+const DEV_STREAM_PACING_MS = process.env.NODE_ENV === "development" ? 100 : 0;
+
 async function parseJsonResponse<T>(response: Response): Promise<T> {
   if (response.ok) {
     return (await response.json()) as T;
@@ -168,7 +170,9 @@ export async function streamAiQuery(
       break;
     }
 
-    buffer += decoder.decode(value, { stream: true });
+    const decodedChunk = decoder.decode(value, { stream: true });
+    console.debug("ai stream raw chunk", decodedChunk);
+    buffer += decodedChunk;
     const events = buffer.split("\n\n");
     buffer = events.pop() ?? "";
 
@@ -186,6 +190,7 @@ export async function streamAiQuery(
         }
 
         const event = JSON.parse(data) as AiStreamEvent;
+        console.debug("ai stream parsed event", event);
 
         if (event.type === "start") {
           await handlers.onStart?.({
@@ -200,6 +205,10 @@ export async function streamAiQuery(
             delta: event.delta,
             content: event.content,
           });
+          if (DEV_STREAM_PACING_MS > 0) {
+            // Dev-only pacing so progressive updates are visually obvious while debugging.
+            await new Promise((resolve) => window.setTimeout(resolve, DEV_STREAM_PACING_MS));
+          }
           continue;
         }
 

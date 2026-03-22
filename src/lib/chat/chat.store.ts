@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { flushSync } from "react-dom";
 
 import {
   appendChatMessage,
@@ -214,6 +215,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
               localMessages.some(
                 (message) => message.status === "sending" || message.status === "streaming"
               ) || localMessages.length > payload.messages.length;
+
+            console.debug("conversation sync decision", {
+              conversationId,
+              shouldPreserveLocal,
+              localMessageCount: localMessages.length,
+              remoteMessageCount: payload.messages.length,
+            });
 
             return shouldPreserveLocal ? localMessages : payload.messages;
           })(),
@@ -510,52 +518,73 @@ export const useChatStore = create<ChatState>((set, get) => ({
               chunkCount += 1;
               console.debug("assistant chunk received", {
                 conversationId,
+                assistantMessageId,
                 chunkCount,
+                contentLength: content.length,
               });
 
-              set((current) => ({
-                messagesByConversation: {
-                  ...current.messagesByConversation,
-                  [conversationId]: updateAssistantPlaceholder(
-                    current.messagesByConversation[conversationId] ?? [],
-                    {
-                      assistantMessageId,
-                      conversationId,
-                      createdAt: timestamp,
-                      content,
-                      status: "streaming",
-                    }
-                  ),
-                },
-              }));
+              flushSync(() => {
+                set((current) => ({
+                  messagesByConversation: {
+                    ...current.messagesByConversation,
+                    [conversationId]: updateAssistantPlaceholder(
+                      current.messagesByConversation[conversationId] ?? [],
+                      {
+                        assistantMessageId,
+                        conversationId,
+                        createdAt: timestamp,
+                        content,
+                        status: "streaming",
+                      }
+                    ),
+                  },
+                }));
+              });
+              console.debug("assistant placeholder flushed", {
+                conversationId,
+                assistantMessageId,
+                contentLength: content.length,
+              });
             },
             onDone: async ({ content }) => {
               const finalContent = content.trim() || streamedContent.trim();
+              console.debug("assistant finalize start", {
+                conversationId,
+                assistantMessageId,
+                finalContentLength: finalContent.length,
+              });
               const persistedAssistantMessage = await appendChatMessage(conversationId, {
                 role: "assistant",
                 content: finalContent,
                 status: "done",
               });
 
-              set((current) => ({
-                isSubmitting: false,
-                isStreaming: false,
-                conversations: upsertConversation(
-                  current.conversations,
-                  persistedAssistantMessage.conversation
-                ),
-                messagesByConversation: {
-                  ...current.messagesByConversation,
-                  [conversationId]: replaceMessageOrAppend(
-                    current.messagesByConversation[conversationId] ?? [],
-                    assistantMessageId,
-                    {
-                      ...persistedAssistantMessage.item,
-                      id: assistantMessageId,
-                    }
+              flushSync(() => {
+                set((current) => ({
+                  isSubmitting: false,
+                  isStreaming: false,
+                  conversations: upsertConversation(
+                    current.conversations,
+                    persistedAssistantMessage.conversation
                   ),
-                },
-              }));
+                  messagesByConversation: {
+                    ...current.messagesByConversation,
+                    [conversationId]: replaceMessageOrAppend(
+                      current.messagesByConversation[conversationId] ?? [],
+                      assistantMessageId,
+                      {
+                        ...persistedAssistantMessage.item,
+                        id: assistantMessageId,
+                      }
+                    ),
+                  },
+                }));
+              });
+              console.debug("assistant finalize complete", {
+                conversationId,
+                assistantMessageId,
+                persistedMessageId: persistedAssistantMessage.item.id,
+              });
             },
           }
         );

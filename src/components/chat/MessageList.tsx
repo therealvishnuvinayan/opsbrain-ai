@@ -7,9 +7,26 @@ import { MessageItem } from "@/components/chat/MessageItem";
 
 export function MessageList({ messages }: { messages: ChatMessage[] }) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const previousMessageCountRef = useRef(0);
+  const previousLastSignatureRef = useRef("");
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+    const lastMessage = messages[messages.length - 1];
+    const nextCount = messages.length;
+    const nextSignature = lastMessage
+      ? `${lastMessage.id}:${lastMessage.status}:${lastMessage.content.length}`
+      : "";
+    const messageCountChanged = nextCount !== previousMessageCountRef.current;
+    const lastMessageChanged = nextSignature !== previousLastSignatureRef.current;
+
+    if (messageCountChanged) {
+      bottomRef.current?.scrollIntoView({ block: "end", behavior: "smooth" });
+    } else if (lastMessageChanged && lastMessage?.status === "streaming") {
+      bottomRef.current?.scrollIntoView({ block: "end", behavior: "auto" });
+    }
+
+    previousMessageCountRef.current = nextCount;
+    previousLastSignatureRef.current = nextSignature;
   }, [messages]);
 
   return (

@@ -21,6 +21,8 @@ interface OpenAIStreamChunk {
   }>;
 }
 
+const SERVER_STREAM_PACING_MS = process.env.NODE_ENV === "development" ? 90 : 24;
+
 function encodeSseEvent(
   encoder: TextEncoder,
   payload:
@@ -46,6 +48,47 @@ function extractDeltaText(payload: OpenAIStreamChunk) {
   }
 
   return "";
+}
+
+function splitDeltaForClient(delta: string) {
+  const parts = delta.match(/\S+\s*/g);
+
+  if (!parts || parts.length === 0) {
+    return [delta];
+  }
+
+  return parts;
+}
+
+async function emitChunkSequence(options: {
+  controller: ReadableStreamDefaultController<Uint8Array>;
+  encoder: TextEncoder;
+  conversationId: string | null;
+  fullContentRef: { value: string };
+  delta: string;
+}) {
+  const pieces = splitDeltaForClient(options.delta);
+
+  for (const piece of pieces) {
+    options.fullContentRef.value += piece;
+    console.debug("AI stream emit chunk", {
+      conversationId: options.conversationId,
+      deltaLength: piece.length,
+      contentLength: options.fullContentRef.value.length,
+      preview: piece.slice(0, 80),
+    });
+    options.controller.enqueue(
+      encodeSseEvent(options.encoder, {
+        type: "chunk",
+        delta: piece,
+        content: options.fullContentRef.value,
+      })
+    );
+
+    if (SERVER_STREAM_PACING_MS > 0) {
+      await new Promise((resolve) => setTimeout(resolve, SERVER_STREAM_PACING_MS));
+    }
+  }
 }
 
 function sseResponse(stream: ReadableStream<Uint8Array>) {
@@ -82,22 +125,31 @@ export async function POST(request: Request) {
 
     if (resolved.type === "unsupported" || resolved.type === "missing_order_id") {
       const stream = new ReadableStream<Uint8Array>({
-        start(controller) {
+        async start(controller) {
+          console.info("AI stream started with immediate response", {
+            conversationId: body.conversationId ?? null,
+            mode: resolved.type,
+          });
+          const fullContentRef = { value: "" };
           controller.enqueue(encodeSseEvent(encoder, { type: "start", sources: resolved.sources }));
-          controller.enqueue(
-            encodeSseEvent(encoder, {
-              type: "chunk",
-              delta: resolved.answer,
-              content: resolved.answer,
-            })
-          );
+          await emitChunkSequence({
+            controller,
+            encoder,
+            conversationId: body.conversationId ?? null,
+            fullContentRef,
+            delta: resolved.answer,
+          });
           controller.enqueue(
             encodeSseEvent(encoder, {
               type: "done",
-              content: resolved.answer,
+              content: fullContentRef.value,
               sources: resolved.sources,
             })
           );
+          console.info("AI stream completed", {
+            conversationId: body.conversationId ?? null,
+            charCount: fullContentRef.value.length,
+          });
           controller.close();
         },
       });
@@ -110,22 +162,30 @@ export async function POST(request: Request) {
 
     if (!apiKey) {
       const stream = new ReadableStream<Uint8Array>({
-        start(controller) {
+        async start(controller) {
+          console.info("AI stream started with fallback answer", {
+            conversationId: body.conversationId ?? null,
+          });
+          const fullContentRef = { value: "" };
           controller.enqueue(encodeSseEvent(encoder, { type: "start", sources: resolved.sources }));
-          controller.enqueue(
-            encodeSseEvent(encoder, {
-              type: "chunk",
-              delta: resolved.fallbackAnswer,
-              content: resolved.fallbackAnswer,
-            })
-          );
+          await emitChunkSequence({
+            controller,
+            encoder,
+            conversationId: body.conversationId ?? null,
+            fullContentRef,
+            delta: resolved.fallbackAnswer,
+          });
           controller.enqueue(
             encodeSseEvent(encoder, {
               type: "done",
-              content: resolved.fallbackAnswer,
+              content: fullContentRef.value,
               sources: resolved.sources,
             })
           );
+          console.info("AI stream completed", {
+            conversationId: body.conversationId ?? null,
+            charCount: fullContentRef.value.length,
+          });
           controller.close();
         },
       });
@@ -164,22 +224,30 @@ export async function POST(request: Request) {
       });
 
       const stream = new ReadableStream<Uint8Array>({
-        start(controller) {
+        async start(controller) {
+          console.info("AI stream started with OpenAI fallback", {
+            conversationId: body.conversationId ?? null,
+          });
+          const fullContentRef = { value: "" };
           controller.enqueue(encodeSseEvent(encoder, { type: "start", sources: resolved.sources }));
-          controller.enqueue(
-            encodeSseEvent(encoder, {
-              type: "chunk",
-              delta: resolved.fallbackAnswer,
-              content: resolved.fallbackAnswer,
-            })
-          );
+          await emitChunkSequence({
+            controller,
+            encoder,
+            conversationId: body.conversationId ?? null,
+            fullContentRef,
+            delta: resolved.fallbackAnswer,
+          });
           controller.enqueue(
             encodeSseEvent(encoder, {
               type: "done",
-              content: resolved.fallbackAnswer,
+              content: fullContentRef.value,
               sources: resolved.sources,
             })
           );
+          console.info("AI stream completed", {
+            conversationId: body.conversationId ?? null,
+            charCount: fullContentRef.value.length,
+          });
           controller.close();
         },
       });
@@ -192,7 +260,7 @@ export async function POST(request: Request) {
         const reader = upstreamResponse.body!.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
-        let fullContent = "";
+        const fullContentRef = { value: "" };
 
         controller.enqueue(encodeSseEvent(encoder, { type: "start", sources: resolved.sources }));
 
@@ -222,7 +290,7 @@ export async function POST(request: Request) {
                 }
 
                 if (data === "[DONE]") {
-                  const finalContent = fullContent || resolved.fallbackAnswer;
+                  const finalContent = fullContentRef.value || resolved.fallbackAnswer;
                   controller.enqueue(
                     encodeSseEvent(encoder, {
                       type: "done",
@@ -245,19 +313,18 @@ export async function POST(request: Request) {
                   continue;
                 }
 
-                fullContent += delta;
-                controller.enqueue(
-                  encodeSseEvent(encoder, {
-                    type: "chunk",
-                    delta,
-                    content: fullContent,
-                  })
-                );
+                await emitChunkSequence({
+                  controller,
+                  encoder,
+                  conversationId: body.conversationId ?? null,
+                  fullContentRef,
+                  delta,
+                });
               }
             }
           }
 
-          const finalContent = fullContent || resolved.fallbackAnswer;
+          const finalContent = fullContentRef.value || resolved.fallbackAnswer;
           controller.enqueue(
             encodeSseEvent(encoder, {
               type: "done",
