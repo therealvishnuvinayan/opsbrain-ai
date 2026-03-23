@@ -17,6 +17,13 @@ import {
   type NormalizedServiceErrorSummary,
 } from "@/lib/aws/service-health";
 import {
+  searchKnowledgeDocs,
+} from "@/lib/knowledge/search-documents";
+import type {
+  KnowledgeSearchFilters,
+  NormalizedKnowledgeSearchResults,
+} from "@/lib/knowledge/types";
+import {
   getClientOrderHistory,
   getOrderDetails,
   getOrderHistory,
@@ -114,6 +121,11 @@ type CloudWatchLogsResult = {
 type ServiceErrorSummaryResult = {
   context: NormalizedServiceErrorSummary;
   sources: Array<{ type: "aws"; endpoint: string }>;
+};
+
+type KnowledgeSearchResult = {
+  context: NormalizedKnowledgeSearchResults;
+  sources: Array<{ type: "rag"; endpoint: string }>;
 };
 
 function pickSources(
@@ -337,6 +349,16 @@ const getServiceErrorSummaryTool: ToolDefinition<
   execute: getServiceErrorSummary,
 };
 
+const searchKnowledgeDocsTool: ToolDefinition<KnowledgeSearchFilters, KnowledgeSearchResult> = {
+  name: OPS_TOOL_NAMES.searchKnowledgeDocs,
+  domain: "knowledge",
+  description: "Search internal SOPs, runbooks, and troubleshooting guides relevant to the current ops question.",
+  requiredParams: ["query"],
+  optionalParams: ["maxResults", "domain", "tags"],
+  sourceType: "rag",
+  execute: searchKnowledgeDocs,
+};
+
 export const opsToolRegistry = [
   getOrderHistoryTool,
   getClientOrderHistoryTool,
@@ -354,6 +376,7 @@ export const opsToolRegistry = [
   getSystemCardsSummaryReconcileSupplierTool,
   getCloudWatchLogsTool,
   getServiceErrorSummaryTool,
+  searchKnowledgeDocsTool,
 ] satisfies readonly RegisteredToolDefinition[];
 
 const toolRegistryByName = new Map<string, RegisteredToolDefinition>(

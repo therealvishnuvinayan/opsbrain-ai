@@ -30,6 +30,9 @@ export interface PackedOrderData {
   awsLogs?: unknown;
   serviceHealth?: unknown;
   infraSummary?: unknown;
+  knowledgeResults?: unknown;
+  docGuidance?: unknown;
+  runbookMatches?: unknown;
 }
 
 export interface PackedOpsContext<TData = Record<string, unknown>> {

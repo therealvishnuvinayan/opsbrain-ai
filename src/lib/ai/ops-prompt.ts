@@ -43,6 +43,8 @@ export function buildOpsPrompt(
       "In Next checks, use flat bullet points and only include checks that are justified by the data.",
       "If some data could not be fetched, mention that briefly in Details.",
       "If AWS or CloudWatch data is present, explain recent system-side issues in simple words.",
+      "If internal docs or runbooks are present, say briefly that the guidance comes from internal docs.",
+      "Use internal docs to suggest practical next checks, but do not claim more certainty than the docs support.",
       "Do not use technical jargon.",
       "Do not mention tools, plans, or execution internals.",
       "Do not invent causes, totals, statuses, or entities that are not shown.",

@@ -1,4 +1,5 @@
 import type { ExecutionRunResult, ToolExecutionResult, ToolExecutionSource } from "@/lib/ops/executor/execution-types";
+import type { NormalizedKnowledgeSearchResults } from "@/lib/knowledge/types";
 import type { ExecutionPlan } from "@/lib/ops/planner/plan-types";
 import { OPS_TOOL_NAMES } from "@/lib/ops/tools/tool-types";
 
@@ -19,6 +20,17 @@ function toStringArray(value: unknown) {
   }
 
   return value.filter((item): item is string => typeof item === "string");
+}
+
+function isNormalizedKnowledgeSearchResults(
+  value: unknown
+): value is NormalizedKnowledgeSearchResults {
+  return (
+    isRecord(value) &&
+    typeof value.query === "string" &&
+    typeof value.returnedCount === "number" &&
+    Array.isArray(value.results)
+  );
 }
 
 function buildExecutionSummary(results: ToolExecutionResult[]): PackedExecutionSummary {
@@ -78,6 +90,8 @@ function getSourceLabel(toolName: string) {
       return "CloudWatch logs";
     case OPS_TOOL_NAMES.getServiceErrorSummary:
       return "Service error summary";
+    case OPS_TOOL_NAMES.searchKnowledgeDocs:
+      return "Knowledge docs";
     default:
       return undefined;
   }
@@ -207,6 +221,9 @@ function packOrderData(results: ToolExecutionResult[]): PackedOrderData {
         data.serviceHealth = result.data;
         data.infraSummary ??= result.data;
         break;
+      case OPS_TOOL_NAMES.searchKnowledgeDocs:
+        data.knowledgeResults = result.data;
+        break;
       default:
         break;
     }
@@ -216,6 +233,18 @@ function packOrderData(results: ToolExecutionResult[]): PackedOrderData {
     data.items ??= buildDerivedItems(data.order);
     data.cards ??= buildDerivedCards(data.order);
     data.billing ??= buildDerivedBilling(data.order);
+  }
+
+  if (isNormalizedKnowledgeSearchResults(data.knowledgeResults)) {
+    data.docGuidance = data.knowledgeResults.results.flatMap((result) => result.guidancePoints).slice(0, 6);
+    data.runbookMatches = data.knowledgeResults.results.slice(0, 3).map((result) => ({
+      title: result.title,
+      source: result.source,
+      relevanceScore: result.relevanceScore,
+      tags: result.tags,
+      domain: result.domain,
+      excerpt: result.excerpt,
+    }));
   }
 
   return data;
@@ -259,6 +288,7 @@ function buildOrderNotes(
   const reconciliationStatusResult = getToolResult(results, OPS_TOOL_NAMES.getReconciliationStatus);
   const cloudWatchLogsResult = getToolResult(results, OPS_TOOL_NAMES.getCloudWatchLogs);
   const serviceHealthResult = getToolResult(results, OPS_TOOL_NAMES.getServiceErrorSummary);
+  const knowledgeDocsResult = getToolResult(results, OPS_TOOL_NAMES.searchKnowledgeDocs);
 
   if (
     cloudWatchLogsResult?.error?.code === "permission_denied"
@@ -282,6 +312,18 @@ function buildOrderNotes(
     data.serviceHealth === undefined
   ) {
     appendNote(notes, "Service health data was unavailable.");
+  }
+
+  if (
+    knowledgeDocsResult?.error?.code === "permission_denied"
+  ) {
+    appendNote(notes, "Knowledge docs could not be accessed due to permissions.");
+  } else if (
+    (summary.failedTools.includes(OPS_TOOL_NAMES.searchKnowledgeDocs) ||
+      summary.partialSuccessTools?.includes(OPS_TOOL_NAMES.searchKnowledgeDocs)) &&
+    data.knowledgeResults === undefined
+  ) {
+    appendNote(notes, "Knowledge doc retrieval was unavailable.");
   }
 
   if (
@@ -398,7 +440,8 @@ function buildOrderNotes(
     data.reconciliationSummary === undefined &&
     data.awsLogs === undefined &&
     data.serviceHealth === undefined &&
-    data.infraSummary === undefined
+    data.infraSummary === undefined &&
+    data.knowledgeResults === undefined
   ) {
     appendNote(notes, "Only order history data was available.");
   }
@@ -431,7 +474,8 @@ function buildOrderNotes(
     data.expiredCards === undefined &&
     data.reconciliationSummary === undefined &&
     data.awsLogs !== undefined &&
-    data.serviceHealth === undefined
+    data.serviceHealth === undefined &&
+    data.knowledgeResults === undefined
   ) {
     appendNote(notes, "Only CloudWatch log data was available.");
   }
@@ -451,7 +495,29 @@ function buildOrderNotes(
     data.reconciliationSummary === undefined &&
     data.awsLogs === undefined &&
     data.serviceHealth === undefined &&
-    data.infraSummary === undefined
+    data.infraSummary === undefined &&
+    data.knowledgeResults !== undefined
+  ) {
+    appendNote(notes, "Only knowledge-doc guidance was available.");
+  }
+
+  if (
+    data.history === undefined &&
+    data.order === undefined &&
+    data.billing === undefined &&
+    data.cards === undefined &&
+    data.items === undefined &&
+    data.audit === undefined &&
+    data.reconciliationStatus === undefined &&
+    data.bufferedRecords === undefined &&
+    data.reconciledRecords === undefined &&
+    data.invalidProductBrandCards === undefined &&
+    data.expiredCards === undefined &&
+    data.reconciliationSummary === undefined &&
+    data.awsLogs === undefined &&
+    data.serviceHealth === undefined &&
+    data.infraSummary === undefined &&
+    data.knowledgeResults === undefined
   ) {
     appendNote(notes, "No successful tool data was available.");
   }
@@ -484,7 +550,12 @@ export function packExecutionContext(
   const summary = buildExecutionSummary(execution.results);
   const sources = collectPackedSources(execution.results);
 
-  if (plan.domain === "orders" || plan.domain === "reconciliation" || plan.domain === "aws") {
+  if (
+    plan.domain === "orders" ||
+    plan.domain === "reconciliation" ||
+    plan.domain === "aws" ||
+    plan.domain === "knowledge"
+  ) {
     const data = packOrderData(execution.results);
 
     return {

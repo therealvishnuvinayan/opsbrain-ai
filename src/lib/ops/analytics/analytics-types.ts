@@ -73,6 +73,14 @@ export interface AwsSummary {
   latestErrorAt?: string;
 }
 
+export interface KnowledgeSummary {
+  returnedCount: number;
+  hasRunbookMatch: boolean;
+  bestScore?: number;
+  topTitles: string[];
+  guidancePoints: string[];
+}
+
 export interface OpsAnalytics {
   domain: OpsDomain;
   intent: string;
@@ -87,6 +95,7 @@ export interface OpsAnalytics {
   auditSummary?: AuditSummary;
   reconciliationSummary?: ReconciliationSummary;
   awsSummary?: AwsSummary;
+  knowledgeSummary?: KnowledgeSummary;
 }
 
 export type OrderAnalytics = OpsAnalytics;

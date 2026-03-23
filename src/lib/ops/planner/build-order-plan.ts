@@ -787,6 +787,122 @@ function buildAwsPlan(
   };
 }
 
+function buildKnowledgeTags(question: string) {
+  const normalized = question.trim().toLowerCase();
+  const tags: string[] = [];
+
+  if (normalized.includes("payment")) {
+    tags.push("payment");
+  }
+
+  if (normalized.includes("order")) {
+    tags.push("orders");
+  }
+
+  if (normalized.includes("reconcil")) {
+    tags.push("reconciliation");
+  }
+
+  if (normalized.includes("cloudwatch") || normalized.includes("backend")) {
+    tags.push("cloudwatch");
+  }
+
+  if (normalized.includes("runbook")) {
+    tags.push("runbook");
+  }
+
+  if (normalized.includes("sop")) {
+    tags.push("sop");
+  }
+
+  if (normalized.includes("product-brand") || normalized.includes("product brand")) {
+    tags.push("product-brand");
+  }
+
+  return tags;
+}
+
+function inferKnowledgeDomain(question: string, fallbackDomain?: ExecutionPlan["domain"]) {
+  const normalized = question.trim().toLowerCase();
+
+  if (normalized.includes("reconcil") || normalized.includes("product-brand") || normalized.includes("product brand")) {
+    return "reconciliation";
+  }
+
+  if (normalized.includes("cloudwatch") || normalized.includes("backend") || normalized.includes("service")) {
+    return "aws";
+  }
+
+  if (normalized.includes("payment") || normalized.includes("billing")) {
+    return "billing";
+  }
+
+  if (normalized.includes("audit")) {
+    return "audit";
+  }
+
+  if (normalized.includes("order")) {
+    return "orders";
+  }
+
+  return fallbackDomain === "knowledge" ? undefined : fallbackDomain;
+}
+
+function withKnowledgeTool(plan: ExecutionPlan, question: string): ExecutionPlan {
+  const domainFilter = inferKnowledgeDomain(question, plan.domain);
+  const tags = buildKnowledgeTags(question);
+
+  return {
+    ...plan,
+    entities: {
+      ...plan.entities,
+      includeKnowledge: true,
+    },
+    tools: [
+      ...plan.tools,
+      buildToolCall(
+        OPS_TOOL_NAMES.searchKnowledgeDocs,
+        "Search internal runbooks, SOPs, and troubleshooting docs relevant to this question.",
+        {
+          query: question,
+          maxResults: 4,
+          domain: domainFilter,
+          tags: tags.length > 0 ? tags : undefined,
+        }
+      ),
+    ],
+    notes: [...(plan.notes ?? []), "Deterministic knowledge-doc retrieval added for guidance."],
+  };
+}
+
+function buildKnowledgePlan(question: string): ExecutionPlan {
+  const domain = inferKnowledgeDomain(question, "knowledge");
+  const tags = buildKnowledgeTags(question);
+
+  return {
+    intent: "knowledge_guidance",
+    domain: "knowledge",
+    entities: {
+      domain: domain ?? null,
+      includeKnowledge: true,
+    },
+    tools: [
+      buildToolCall(
+        OPS_TOOL_NAMES.searchKnowledgeDocs,
+        "Search internal runbooks, SOPs, and troubleshooting docs relevant to the question.",
+        {
+          query: question,
+          maxResults: 5,
+          domain,
+          tags: tags.length > 0 ? tags : undefined,
+        }
+      ),
+    ],
+    confidence: 0.82,
+    notes: ["Deterministic knowledge guidance plan based on runbook and SOP keywords."],
+  };
+}
+
 export function buildOrderPlan(question: string): ExecutionPlan {
   const normalized = question.trim().toLowerCase();
   const hasOrderCue = normalized.includes("order") || /\bO-\d{3,}\b/i.test(question);
@@ -860,35 +976,60 @@ export function buildOrderPlan(question: string): ExecutionPlan {
     "service fail",
     "service failed",
   ]) || ((normalized.includes("error") || normalized.includes("errors") || normalized.includes("issue")) && Boolean(serviceName));
+  const asksForKnowledge = hasAnyKeyword(normalized, [
+    "what should ops do",
+    "what should we do",
+    "what should we check next",
+    "what should we check",
+    "what is the process",
+    "how do we handle",
+    "runbook",
+    "sop",
+    "troubleshooting guide",
+    "guide for",
+    "process for",
+  ]);
 
   if (asksForAws) {
-    return buildAwsPlan(question, {
+    const plan = buildAwsPlan(question, {
       orderId,
       historyId,
     });
+
+    return asksForKnowledge ? withKnowledgeTool(plan, question) : plan;
   }
 
   if (asksForReconciliation) {
-    return buildReconciliationPlan(question, historyId, {
+    const plan = buildReconciliationPlan(question, historyId, {
       orderId,
       includeAudit: asksForAuditActivity,
     });
+
+    return asksForKnowledge ? withKnowledgeTool(plan, question) : plan;
   }
 
   if (asksForAuditActivity) {
-    return buildAuditActivityPlan(question, orderId);
+    const plan = buildAuditActivityPlan(question, orderId);
+    return asksForKnowledge ? withKnowledgeTool(plan, question) : plan;
   }
 
   if (asksForIssueInvestigation) {
-    return buildIssueInvestigationPlan(question, orderId);
+    const plan = buildIssueInvestigationPlan(question, orderId);
+    return asksForKnowledge ? withKnowledgeTool(plan, question) : plan;
   }
 
   if (asksForSpecificOrder || (orderId && normalized.includes("order"))) {
-    return buildOrderDetailPlan(question, orderId);
+    const plan = buildOrderDetailPlan(question, orderId);
+    return asksForKnowledge ? withKnowledgeTool(plan, question) : plan;
   }
 
   if (asksForHistory || normalized.includes("today") || normalized.includes("yesterday")) {
-    return buildHistoryPlan(question, useClientHistory);
+    const plan = buildHistoryPlan(question, useClientHistory);
+    return asksForKnowledge ? withKnowledgeTool(plan, question) : plan;
+  }
+
+  if (asksForKnowledge) {
+    return buildKnowledgePlan(question);
   }
 
   return {

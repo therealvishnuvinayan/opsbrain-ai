@@ -5,6 +5,10 @@ import {
   hasAwsPackedData,
 } from "@/lib/ops/analytics/aws-analytics";
 import {
+  analyzeKnowledgeContext,
+  hasKnowledgePackedData,
+} from "@/lib/ops/analytics/knowledge-analytics";
+import {
   analyzeReconciliationContext,
   hasReconciliationPackedData,
 } from "@/lib/ops/analytics/reconciliation-analytics";
@@ -44,7 +48,9 @@ function mergeAnalytics(base: OpsAnalytics, next: OpsAnalytics): OpsAnalytics {
     ...base,
     domain: base.domain,
     summary:
-      next.awsSummary && next.awsSummary.hasRecentErrors
+      next.knowledgeSummary && next.knowledgeSummary.hasRunbookMatch
+        ? `${base.summary} I also found matching internal guidance.`
+        : next.awsSummary && next.awsSummary.hasRecentErrors
         ? `${base.summary} I also found recent system errors.`
         : next.reconciliationSummary &&
             (next.reconciliationSummary.appearsIncomplete ||
@@ -60,6 +66,7 @@ function mergeAnalytics(base: OpsAnalytics, next: OpsAnalytics): OpsAnalytics {
     notes,
     reconciliationSummary: next.reconciliationSummary,
     awsSummary: next.awsSummary,
+    knowledgeSummary: next.knowledgeSummary,
   };
 }
 
@@ -76,6 +83,7 @@ export function analyzeOpsContext(
   );
   const hasReconciliationData = hasReconciliationPackedData(context.data);
   const hasAwsData = hasAwsPackedData(context.data);
+  const hasKnowledgeData = hasKnowledgePackedData(context.data);
 
   if (hasOrderOrAuditData) {
     const orderAnalytics = analyzeOrderContext(context);
@@ -89,21 +97,41 @@ export function analyzeOpsContext(
       mergedAnalytics = mergeAnalytics(mergedAnalytics, analyzeAwsContext(context));
     }
 
+    if (hasKnowledgeData) {
+      mergedAnalytics = mergeAnalytics(mergedAnalytics, analyzeKnowledgeContext(context));
+    }
+
     return mergedAnalytics;
   }
 
   if (hasReconciliationData) {
     const reconciliationAnalytics = analyzeReconciliationContext(context);
 
-    if (!hasAwsData) {
-      return reconciliationAnalytics;
+    let mergedAnalytics = reconciliationAnalytics;
+
+    if (hasAwsData) {
+      mergedAnalytics = mergeAnalytics(mergedAnalytics, analyzeAwsContext(context));
     }
 
-    return mergeAnalytics(reconciliationAnalytics, analyzeAwsContext(context));
+    if (hasKnowledgeData) {
+      mergedAnalytics = mergeAnalytics(mergedAnalytics, analyzeKnowledgeContext(context));
+    }
+
+    return mergedAnalytics;
   }
 
   if (hasAwsData) {
-    return analyzeAwsContext(context);
+    const awsAnalytics = analyzeAwsContext(context);
+
+    if (!hasKnowledgeData) {
+      return awsAnalytics;
+    }
+
+    return mergeAnalytics(awsAnalytics, analyzeKnowledgeContext(context));
+  }
+
+  if (hasKnowledgeData) {
+    return analyzeKnowledgeContext(context);
   }
 
   return {
