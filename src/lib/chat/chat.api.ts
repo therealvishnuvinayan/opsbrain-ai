@@ -26,6 +26,16 @@ interface AiQueryResponse {
     type: string;
     endpoint?: string;
   }>;
+  confidence?: "high" | "medium" | "limited";
+  basedOn?: Array<{
+    label: string;
+    domain?: string;
+  }>;
+  notes?: Array<{
+    message: string;
+  }>;
+  sourceLabels?: string[];
+  partialData?: boolean;
 }
 
 type AiStreamEvent =

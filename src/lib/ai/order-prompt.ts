@@ -356,3 +356,8 @@ export function buildOrderDetailFallbackAnswer(context: NormalizedOrderDetail) {
     .filter(Boolean)
     .join("\n\n");
 }
+
+export {
+  buildOpsFallbackAnswer as buildPackedOrderFallbackAnswer,
+  buildOpsPrompt as buildPackedOrderPrompt,
+} from "@/lib/ai/ops-prompt";

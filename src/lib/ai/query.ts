@@ -19,6 +19,7 @@ import {
   buildOrderHistoryFallbackAnswer,
   buildOrderHistoryPrompt,
 } from "@/lib/ai/order-prompt";
+import { retryAsync, withTimeout } from "@/lib/ops/runtime/external-request";
 
 export interface AiQuerySource {
   type: string;
@@ -377,21 +378,32 @@ export async function generateCompletion(options: {
   }
 
   try {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: process.env.OPENAI_CHAT_MODEL?.trim() || "gpt-4o-mini",
-        temperature: 0.2,
-        messages: [
-          { role: "system", content: options.system },
-          { role: "user", content: options.user },
-        ],
-      }),
-      cache: "no-store",
+    const response = await retryAsync({
+      attempts: 2,
+      retryDelayMs: 400,
+      factory: async () =>
+        withTimeout(
+          async (signal) =>
+            fetch("https://api.openai.com/v1/chat/completions", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${apiKey}`,
+              },
+              body: JSON.stringify({
+                model: process.env.OPENAI_CHAT_MODEL?.trim() || "gpt-4o-mini",
+                temperature: 0.2,
+                messages: [
+                  { role: "system", content: options.system },
+                  { role: "user", content: options.user },
+                ],
+              }),
+              cache: "no-store",
+              signal,
+            }),
+          20_000,
+          "OpenAI completion request timed out."
+        ),
     });
 
     if (!response.ok) {

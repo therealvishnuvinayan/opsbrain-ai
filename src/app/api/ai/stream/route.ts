@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getApiSession } from "@/lib/api-session";
-import { resolveAiQuery } from "@/lib/ai/query";
+import { runOpsQuery } from "@/lib/ops/orchestrator/run-ops-query";
 
 interface StreamRequestBody {
   question?: string;
@@ -120,10 +120,14 @@ export async function POST(request: Request) {
   }
 
   try {
-    const resolved = await resolveAiQuery(question);
+    const resolved = await runOpsQuery(question);
     const encoder = new TextEncoder();
 
-    if (resolved.type === "unsupported" || resolved.type === "missing_order_id") {
+    if (
+      resolved.type === "unsupported" ||
+      resolved.type === "missing_order_id" ||
+      resolved.type === "missing_history_id"
+    ) {
       const stream = new ReadableStream<Uint8Array>({
         async start(controller) {
           console.info("AI stream started with immediate response", {
@@ -165,6 +169,7 @@ export async function POST(request: Request) {
         async start(controller) {
           console.info("AI stream started with fallback answer", {
             conversationId: body.conversationId ?? null,
+            intent: resolved.type === "resolved" ? resolved.plan?.intent : undefined,
           });
           const fullContentRef = { value: "" };
           controller.enqueue(encodeSseEvent(encoder, { type: "start", sources: resolved.sources }));
@@ -196,6 +201,7 @@ export async function POST(request: Request) {
     console.info("AI stream start", {
       conversationId: body.conversationId ?? null,
       sourceCount: resolved.sources.length,
+      intent: resolved.type === "resolved" ? resolved.plan?.intent : undefined,
     });
 
     const upstreamResponse = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -367,7 +373,7 @@ export async function POST(request: Request) {
         controller.enqueue(
           encodeSseEvent(encoder, {
             type: "error",
-            message: "I couldn't retrieve Bamboo order data right now. Please try again in a moment.",
+            message: "I couldn't retrieve Bamboo ops data right now. Please try again in a moment.",
           })
         );
         controller.close();
