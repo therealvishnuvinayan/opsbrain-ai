@@ -113,19 +113,34 @@ function buildExamples(context: NormalizedOrderHistory) {
   return context.orders.slice(0, 3).map((order) => order.orderNumber);
 }
 
+function isHealthyDominantStatus(status?: string) {
+  const normalized = status?.toLowerCase() ?? "";
+  return (
+    normalized.includes("success") ||
+    normalized.includes("succeed") ||
+    normalized.includes("complete") ||
+    normalized.includes("done")
+  );
+}
+
 function buildNextChecks(statusSummary: OrderStatusSummary) {
   const nextChecks: string[] = [];
+  const totalReturned = Math.max(1, statusSummary.totalReturned ?? 0);
+  const issueCount =
+    (statusSummary.failureCount ?? 0) +
+    (statusSummary.blockedCount ?? 0) +
+    (statusSummary.pendingCount ?? 0) +
+    (statusSummary.missingCardsCount ?? 0);
+  const issueShare = issueCount / totalReturned;
+  const hasMaterialFailures =
+    (statusSummary.failureCount ?? 0) > 0 &&
+    ((statusSummary.hasConcentratedFailures ?? false) || issueShare >= 0.3);
 
-  if ((statusSummary.failureCount ?? 0) > 0) {
+  if (hasMaterialFailures) {
     addUnique(nextChecks, "payment");
   }
 
-  if (
-    (statusSummary.failureCount ?? 0) > 0 ||
-    (statusSummary.blockedCount ?? 0) > 0 ||
-    (statusSummary.pendingCount ?? 0) > 0 ||
-    (statusSummary.missingCardsCount ?? 0) > 0
-  ) {
+  if (hasMaterialFailures || (statusSummary.missingCardsCount ?? 0) > 0) {
     addUnique(nextChecks, "supplier processing");
   }
 
@@ -133,7 +148,19 @@ function buildNextChecks(statusSummary: OrderStatusSummary) {
     addUnique(nextChecks, "card creation");
   }
 
+  if (
+    nextChecks.length === 0 &&
+    ((statusSummary.blockedCount ?? 0) > 0 || (statusSummary.pendingCount ?? 0) > 0) &&
+    issueShare >= 0.3
+  ) {
+    addUnique(nextChecks, "where the orders are slowing down");
+  }
+
   if (nextChecks.length === 0) {
+    if (isHealthyDominantStatus(statusSummary.dominantStatus)) {
+      return nextChecks;
+    }
+
     addUnique(nextChecks, "a few recent orders to make sure they are moving normally");
   }
 

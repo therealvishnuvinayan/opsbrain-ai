@@ -591,6 +591,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Assistant response could not be saved.";
+        const existingContent =
+          get().messagesByConversation[conversationId]?.find(
+            (item) => item.id === assistantMessageId
+          )?.content ?? "";
+        console.error("assistant persistence failed", {
+          conversationId,
+          assistantMessageId,
+          message,
+          existingContentLength: existingContent.length,
+        });
 
         set((current) => ({
           isSubmitting: false,

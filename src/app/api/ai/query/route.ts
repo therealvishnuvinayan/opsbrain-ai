@@ -53,6 +53,10 @@ export async function POST(request: Request) {
       logOpsQueryTrace(
         finalTrace
       );
+      console.info("AI query route completed", {
+        resultType: result.type,
+        sourceCount: result.sources.length,
+      });
       return NextResponse.json({
         answer: envelope.answer,
         sources: result.sources,
@@ -81,6 +85,11 @@ export async function POST(request: Request) {
       logOpsQueryTrace(
         finalTrace
       );
+      console.info("AI query route completed", {
+        resultType: result.type,
+        usedFallback: true,
+        sourceCount: result.sources.length,
+      });
       return NextResponse.json({
         answer: envelope.answer,
         sources: result.sources,
@@ -116,6 +125,11 @@ export async function POST(request: Request) {
     logOpsQueryTrace(
       finalTrace
     );
+    console.info("AI query route completed", {
+      resultType: result.type,
+      usedFallback,
+      sourceCount: result.sources.length,
+    });
 
     return NextResponse.json({
       answer: envelope.answer,

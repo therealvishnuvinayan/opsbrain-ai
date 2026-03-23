@@ -4,7 +4,6 @@ import {
   buildOpsFallbackAnswer,
   buildOpsPrompt,
 } from "@/lib/ai/ops-prompt";
-import { resolveAiQuery } from "@/lib/ai/query";
 import { analyzeOpsContext } from "@/lib/ops/analytics/analyze-ops-context";
 import type { OpsAnalytics } from "@/lib/ops/analytics/analytics-types";
 import { packExecutionContext } from "@/lib/ops/context/pack-execution-context";
@@ -117,40 +116,6 @@ function hasMeaningfulPackedOpsData(context: PackedOpsContext<PackedOrderData>) 
   );
 }
 
-async function resolveLegacyQuery(question: string, queryId: string, totalStartMs: number): Promise<RunOpsQueryResult> {
-  const legacyResult = await resolveAiQuery(question);
-  const totalMs = Math.round(performance.now() - totalStartMs);
-  const trace = buildOpsQueryTrace({
-    queryId,
-    question,
-    resultType: legacyResult.type === "resolved" ? "legacy_resolved" : legacyResult.type,
-    totalMs,
-    timings: {
-      planningMs: totalMs,
-      executionMs: 0,
-      packingMs: 0,
-      analyticsMs: 0,
-    },
-    usedFallback: false,
-    noMeaningfulData: true,
-  });
-
-  if (legacyResult.type === "unsupported" || legacyResult.type === "missing_order_id") {
-    return {
-      ...legacyResult,
-      trace,
-    };
-  }
-
-  return {
-    type: "resolved",
-    prompt: legacyResult.prompt,
-    fallbackAnswer: legacyResult.fallbackAnswer,
-    sources: legacyResult.sources,
-    trace,
-  };
-}
-
 export async function runOpsQuery(
   question: string,
   options: RunOpsQueryOptions = {}
@@ -162,15 +127,34 @@ export async function runOpsQuery(
   const planningMs = Math.round(performance.now() - planningStartMs);
 
   if (plan.intent === "unsupported") {
-    return resolveLegacyQuery(question, queryId, totalStartMs);
+    const totalMs = Math.round(performance.now() - totalStartMs);
+    return {
+      type: "unsupported",
+      answer:
+        "I couldn't match that request to a supported ops check yet. Try including the order id, reconciliation history id, service name, or the specific data you want checked.",
+      sources: [],
+      trace: buildOpsQueryTrace({
+        queryId,
+        question,
+        resultType: "unsupported",
+        plan,
+        totalMs,
+        timings: {
+          planningMs,
+          executionMs: 0,
+          packingMs: 0,
+          analyticsMs: 0,
+        },
+        noMeaningfulData: true,
+      }),
+    };
   }
 
   if (isMissingOrderIdPlan(plan)) {
     const totalMs = Math.round(performance.now() - totalStartMs);
     return {
       type: "missing_order_id",
-      answer:
-        "Please include the order id. This first version supports order history and order detail queries by order id.",
+      answer: "Please provide the order id.",
       sources: [],
       trace: buildOpsQueryTrace({
         queryId,
@@ -193,8 +177,7 @@ export async function runOpsQuery(
     const totalMs = Math.round(performance.now() - totalStartMs);
     return {
       type: "missing_history_id",
-      answer:
-        "Please include the reconciliation history id. This first version supports reconciliation checks by history id.",
+      answer: "Please provide the reconciliation history id.",
       sources: [],
       trace: buildOpsQueryTrace({
         queryId,
@@ -214,7 +197,27 @@ export async function runOpsQuery(
   }
 
   if (!supportsOrchestratedOpsPlan(plan)) {
-    return resolveLegacyQuery(question, queryId, totalStartMs);
+    const totalMs = Math.round(performance.now() - totalStartMs);
+    return {
+      type: "unsupported",
+      answer:
+        "I couldn't match that request to a supported ops check yet. Try including the order id, reconciliation history id, service name, or the specific data you want checked.",
+      sources: [],
+      trace: buildOpsQueryTrace({
+        queryId,
+        question,
+        resultType: "unsupported",
+        plan,
+        totalMs,
+        timings: {
+          planningMs,
+          executionMs: 0,
+          packingMs: 0,
+          analyticsMs: 0,
+        },
+        noMeaningfulData: true,
+      }),
+    };
   }
 
   console.info("Ops query selected plan", {
@@ -246,6 +249,12 @@ export async function runOpsQuery(
     successCount,
     partialSuccessCount,
     errorCount,
+    toolResults: execution.results.map((result) => ({
+      toolName: result.toolName,
+      status: result.status,
+      errorCode: result.error?.code,
+      durationMs: result.durationMs,
+    })),
   });
 
   const prompt = buildOpsPrompt(question, packedContext, analytics);
