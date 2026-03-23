@@ -6,15 +6,9 @@ import type {
   OrderPatternAnalysis,
   OrderTrendAnalysis,
 } from "@/lib/bamboo/orders";
-import type { OpsAnalytics } from "@/lib/ops/analytics/analytics-types";
-import type { PackedOpsContext, PackedOrderData } from "@/lib/ops/context/context-types";
 
 function joinExamples(values: string[], max = 3) {
   return values.slice(0, max).join(", ");
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function buildHistoryNextStep(context: NormalizedOrderHistory) {
@@ -363,111 +357,7 @@ export function buildOrderDetailFallbackAnswer(context: NormalizedOrderDetail) {
     .join("\n\n");
 }
 
-function isNormalizedOrderHistory(value: unknown): value is NormalizedOrderHistory {
-  return isRecord(value) && Array.isArray(value.orders) && typeof value.returnedCount === "number";
-}
-
-function isNormalizedOrderDetail(value: unknown): value is NormalizedOrderDetail {
-  return (
-    isRecord(value) &&
-    typeof value.orderId === "string" &&
-    typeof value.status === "string" &&
-    Array.isArray(value.items) &&
-    Array.isArray(value.cards)
-  );
-}
-
-function buildPackedOrderAvailabilityNote(notes: string[]) {
-  const availabilityNotes = notes.filter(
-    (note) =>
-      note.includes("unavailable") ||
-      note.includes("could not be retrieved") ||
-      note.includes("failed")
-  );
-
-  if (availabilityNotes.length === 0) {
-    return "";
-  }
-
-  return `Availability note: ${availabilityNotes.join(" ")}`;
-}
-
-export function buildPackedOrderPrompt(
-  question: string,
-  context: PackedOpsContext<PackedOrderData>,
-  analytics: OpsAnalytics
-) {
-  return {
-    system: [
-      "You are Bamboo AI, a helpful teammate for operations users.",
-      "Answer only from the packed ops context and structured analytics you are given.",
-      "Use simple English and keep the answer short and clear.",
-      "Be direct and confident.",
-      "Use the analytics as the primary interpretation layer and the packed context as supporting evidence.",
-      "Start with what is happening in plain language.",
-      "Then explain the main issue or pattern in simple words.",
-      "Mention up to 2 or 3 example ids when useful.",
-      "If audit activity is present, explain what it suggests in simple words.",
-      "If audit activity is missing, say that briefly when it matters.",
-      "If reconciliation data is present, explain the main reconciliation signal in simple words.",
-      "If reconciliation still has buffered records or invalid mappings, say that clearly.",
-      "If some requested data was unavailable, mention that briefly only when relevant.",
-      "Format the answer with a blank line between sections.",
-      "Write the final 'You should check:' section as bullet points, with one bullet on each line.",
-      "Do not use technical jargon.",
-      "Do not invent causes, totals, or statuses that are not shown in the packed context.",
-      "Do not mention tools, plans, or execution internals unless data availability matters.",
-    ].join(" "),
-    user: [
-      `User question: ${question}`,
-      "Structured analytics:",
-      JSON.stringify(analytics, null, 2),
-      "Packed ops context:",
-      JSON.stringify(context, null, 2),
-      "Write a short answer in this order:",
-      "1. what is happening",
-      "2. the main issue or pattern",
-      "3. example ids if useful",
-      "4. what to check next",
-      "Use the structured analytics first and only use the packed context to support it.",
-    ].join("\n\n"),
-  };
-}
-
-export function buildPackedOrderFallbackAnswer(
-  context: PackedOpsContext<PackedOrderData>,
-  analytics: OpsAnalytics
-) {
-  const availabilityNote = buildPackedOrderAvailabilityNote(analytics.notes);
-  const examplesLine =
-    analytics.examples.length > 0
-      ? `Examples: ${joinExamples(analytics.examples)}.`
-      : "";
-  const nextChecksLine =
-    analytics.nextChecks.length > 0 ? formatCheckList(analytics.nextChecks) : "";
-
-  const body = [
-    analytics.summary,
-    ...analytics.patterns.slice(0, 3),
-    examplesLine,
-    availabilityNote,
-    nextChecksLine,
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-
-  if (body) {
-    return body;
-  }
-
-  if (context.notes.length > 0) {
-    return [
-      "I could not retrieve complete Bamboo order data right now.",
-      availabilityNote || context.notes.join(" "),
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-  }
-
-  return "I couldn't retrieve Bamboo order data right now. Please try again in a moment.";
-}
+export {
+  buildOpsFallbackAnswer as buildPackedOrderFallbackAnswer,
+  buildOpsPrompt as buildPackedOrderPrompt,
+} from "@/lib/ai/ops-prompt";

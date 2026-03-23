@@ -192,7 +192,11 @@ export function analyzeReconciliationContext(
   }
 
   if (notes.some((note) => note.includes("unavailable"))) {
-    addUnique(nextChecks, "the unavailable reconciliation endpoints");
+    addUnique(nextChecks, "the reconciliation data you could not access");
+  }
+
+  if (notes.some((note) => note.toLowerCase().includes("permission"))) {
+    addUnique(nextChecks, "the reconciliation data you do not currently have access to");
   }
 
   return {

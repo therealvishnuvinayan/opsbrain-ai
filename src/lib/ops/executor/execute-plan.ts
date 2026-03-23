@@ -3,6 +3,7 @@ import type { RegisteredToolDefinition } from "@/lib/ops/tools/tool-types";
 
 import type {
   ExecutionRunResult,
+  ToolExecutionErrorCode,
   ToolExecutionError,
   ToolExecutionResult,
   ToolExecutionSource,
@@ -24,7 +25,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function toExecutionError(
-  code: string,
+  code: ToolExecutionErrorCode,
   message: string,
   details?: Record<string, unknown>
 ): ToolExecutionError {
@@ -76,6 +77,51 @@ function getErrorMessage(error: unknown) {
   return "Unknown tool execution error.";
 }
 
+function classifyExecutionError(error: unknown) {
+  if (error instanceof Error) {
+    const message = error.message.trim();
+    const lowerMessage = message.toLowerCase();
+    const bambooStatus = "status" in error && typeof error.status === "number" ? error.status : undefined;
+    const bambooPath = "path" in error && typeof error.path === "string" ? error.path : undefined;
+
+    if (
+      bambooStatus === 401 ||
+      bambooStatus === 403 ||
+      lowerMessage.includes("not authorized") ||
+      lowerMessage.includes("permission") ||
+      lowerMessage.includes("status 401") ||
+      lowerMessage.includes("status 403")
+    ) {
+      return toExecutionError("permission_denied", "Access to this Bamboo endpoint is not permitted.", {
+        status: bambooStatus,
+        path: bambooPath,
+      });
+    }
+
+    if (bambooStatus === 404 || lowerMessage.includes("status 404")) {
+      return toExecutionError("not_found", "The requested Bamboo data was not found.", {
+        status: bambooStatus,
+        path: bambooPath,
+      });
+    }
+
+    if (
+      lowerMessage.includes("abort") ||
+      lowerMessage.includes("timeout") ||
+      lowerMessage.includes("network") ||
+      lowerMessage.includes("fetch failed") ||
+      lowerMessage.includes("econn") ||
+      lowerMessage.includes("enotfound")
+    ) {
+      return toExecutionError("network_error", "The Bamboo request could not be completed.", {
+        path: bambooPath,
+      });
+    }
+  }
+
+  return toExecutionError("unknown_error", getErrorMessage(error));
+}
+
 export function validateToolParams(
   tool: RegisteredToolDefinition,
   params: Record<string, unknown>
@@ -116,7 +162,7 @@ export async function executeToolCall(
       status: "error",
       params,
       durationMs: Date.now() - startedAt,
-      error: toExecutionError("tool_not_found", `Tool "${toolCall.toolName}" is not registered.`, {
+      error: toExecutionError("not_found", `Tool "${toolCall.toolName}" is not registered.`, {
         toolName: toolCall.toolName,
       }),
     };
@@ -130,7 +176,7 @@ export async function executeToolCall(
       params,
       durationMs: Date.now() - startedAt,
       error: toExecutionError(
-        "missing_required_params",
+        "validation_error",
         `Tool "${toolCall.toolName}" is missing required params: ${validation.missingParams.join(", ")}.`,
         {
           toolName: toolCall.toolName,
@@ -153,18 +199,25 @@ export async function executeToolCall(
       durationMs: Date.now() - startedAt,
     };
   } catch (error) {
+    const normalizedError = classifyExecutionError(error);
+    const status = normalizedError.code === "permission_denied" ? "partial_success" : "error";
+
     return {
       toolName: toolCall.toolName,
-      status: "error",
+      status,
       params,
       durationMs: Date.now() - startedAt,
-      error: toExecutionError(
-        "tool_execution_failed",
-        `Tool "${toolCall.toolName}" failed: ${getErrorMessage(error)}.`,
-        {
+      error: {
+        ...normalizedError,
+        message:
+          status === "partial_success"
+            ? `Tool "${toolCall.toolName}" returned partial access: ${normalizedError.message}`
+            : `Tool "${toolCall.toolName}" failed: ${normalizedError.message}`,
+        details: {
           toolName: toolCall.toolName,
-        }
-      ),
+          ...(normalizedError.details ?? {}),
+        },
+      },
     };
   }
 }
@@ -175,6 +228,14 @@ export function summarizeExecutionFailures(results: ToolExecutionResult[]) {
     .map((result) => result.error as ToolExecutionError);
 
   return errors.length > 0 ? errors : undefined;
+}
+
+export function summarizeExecutionPartialFailures(results: ToolExecutionResult[]) {
+  const partialErrors = results
+    .filter((result) => result.status === "partial_success" && result.error)
+    .map((result) => result.error as ToolExecutionError);
+
+  return partialErrors.length > 0 ? partialErrors : undefined;
 }
 
 export async function executePlan(
@@ -191,5 +252,6 @@ export async function executePlan(
     plan,
     results,
     errors: summarizeExecutionFailures(results),
+    partialErrors: summarizeExecutionPartialFailures(results),
   };
 }

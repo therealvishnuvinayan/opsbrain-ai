@@ -1,5 +1,19 @@
 import "server-only";
 
+export class BambooRequestError extends Error {
+  status?: number;
+  path: string;
+  responseBody?: string;
+
+  constructor(path: string, message: string, options?: { status?: number; responseBody?: string }) {
+    super(message);
+    this.name = "BambooRequestError";
+    this.path = path;
+    this.status = options?.status;
+    this.responseBody = options?.responseBody;
+  }
+}
+
 function getRequiredEnv(name: "BAMBOO_SWAGGER_BASE_URL" | "BAMBOO_SWAGGER_BEARER_TOKEN") {
   const value = process.env[name]?.trim();
 
@@ -61,7 +75,10 @@ export async function getBambooJson<T>(
         status: response.status,
         body: message.slice(0, 400),
       });
-      throw new Error(`Bamboo request failed with status ${response.status}.`);
+      throw new BambooRequestError(path, `Bamboo request failed with status ${response.status}.`, {
+        status: response.status,
+        responseBody: message.slice(0, 400),
+      });
     }
 
     return (await response.json()) as T;

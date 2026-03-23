@@ -8,6 +8,7 @@ export interface PackedSource {
 
 export interface PackedExecutionSummary {
   successfulTools: string[];
+  partialSuccessTools?: string[];
   failedTools: string[];
   skippedTools?: string[];
   totalTools: number;

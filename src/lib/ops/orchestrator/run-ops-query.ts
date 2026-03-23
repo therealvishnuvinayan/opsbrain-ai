@@ -1,9 +1,9 @@
 import "server-only";
 
 import {
-  buildPackedOrderFallbackAnswer,
-  buildPackedOrderPrompt,
-} from "@/lib/ai/order-prompt";
+  buildOpsFallbackAnswer,
+  buildOpsPrompt,
+} from "@/lib/ai/ops-prompt";
 import { resolveAiQuery } from "@/lib/ai/query";
 import { analyzeOpsContext } from "@/lib/ops/analytics/analyze-ops-context";
 import type { OpsAnalytics } from "@/lib/ops/analytics/analytics-types";
@@ -145,19 +145,37 @@ export async function runOpsQuery(
     return resolveLegacyQuery(question);
   }
 
+  console.info("Ops query selected plan", {
+    domain: plan.domain,
+    intent: plan.intent,
+    tools: plan.tools.map((tool) => tool.toolName),
+  });
+
   const execution = await executePlan(plan, options.executePlanOptions);
   const packedContext = packExecutionContext(plan, execution) as PackedOpsContext<PackedOrderData>;
   const analytics = analyzeOpsContext(packedContext);
   const hasMeaningfulData = hasMeaningfulPackedOpsData(packedContext);
+  const successCount = execution.results.filter((result) => result.status === "success").length;
+  const partialSuccessCount = execution.results.filter(
+    (result) => result.status === "partial_success"
+  ).length;
+  const errorCount = execution.results.filter((result) => result.status === "error").length;
+
+  console.info("Ops query execution summary", {
+    domain: plan.domain,
+    intent: plan.intent,
+    totalTools: execution.results.length,
+    successCount,
+    partialSuccessCount,
+    errorCount,
+  });
 
   return {
     type: "resolved",
-    prompt: buildPackedOrderPrompt(question, packedContext, analytics),
+    prompt: buildOpsPrompt(question, packedContext, analytics),
     fallbackAnswer: hasMeaningfulData
-      ? buildPackedOrderFallbackAnswer(packedContext, analytics)
-      : plan.domain === "reconciliation"
-        ? "I couldn't retrieve Bamboo reconciliation data right now. Please try again in a moment."
-        : "I couldn't retrieve Bamboo order data right now. Please try again in a moment.",
+      ? buildOpsFallbackAnswer(packedContext, analytics)
+      : "I couldn't retrieve Bamboo operations data right now. Please try again in a moment.",
     useFallbackOnly: !hasMeaningfulData,
     sources: packedContext.sources,
     plan,

@@ -1,9 +1,16 @@
 import type { ExecutionPlan } from "@/lib/ops/planner/plan-types";
 
-export type ToolExecutionStatus = "success" | "error" | "skipped";
+export type ToolExecutionStatus = "success" | "partial_success" | "error" | "skipped";
+
+export type ToolExecutionErrorCode =
+  | "network_error"
+  | "permission_denied"
+  | "not_found"
+  | "validation_error"
+  | "unknown_error";
 
 export interface ToolExecutionError {
-  code: string;
+  code: ToolExecutionErrorCode;
   message: string;
   details?: Record<string, unknown>;
 }
@@ -28,4 +35,5 @@ export interface ExecutionRunResult {
   plan: ExecutionPlan;
   results: ToolExecutionResult[];
   errors?: ToolExecutionError[];
+  partialErrors?: ToolExecutionError[];
 }

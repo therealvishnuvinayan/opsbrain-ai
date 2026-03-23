@@ -25,6 +25,9 @@ function buildExecutionSummary(results: ToolExecutionResult[]): PackedExecutionS
   const successfulTools = results
     .filter((result) => result.status === "success")
     .map((result) => result.toolName);
+  const partialSuccessTools = results
+    .filter((result) => result.status === "partial_success")
+    .map((result) => result.toolName);
   const failedTools = results
     .filter((result) => result.status === "error")
     .map((result) => result.toolName);
@@ -34,6 +37,7 @@ function buildExecutionSummary(results: ToolExecutionResult[]): PackedExecutionS
 
   return {
     successfulTools,
+    partialSuccessTools: partialSuccessTools.length > 0 ? partialSuccessTools : undefined,
     failedTools,
     skippedTools: skippedTools.length > 0 ? skippedTools : undefined,
     totalTools: results.length,
@@ -226,86 +230,110 @@ function appendNote(notes: string[], note: string) {
   }
 }
 
+function getToolResult(results: ToolExecutionResult[], toolName: string) {
+  return results.find((result) => result.toolName === toolName);
+}
+
 function buildOrderNotes(
   plan: ExecutionPlan,
   summary: PackedExecutionSummary,
+  results: ToolExecutionResult[],
   data: PackedOrderData
 ) {
   const notes = [...(plan.notes ?? [])];
-  const hasFailures = summary.failedTools.length > 0 || (summary.skippedTools?.length ?? 0) > 0;
+  const hasMissingData =
+    summary.failedTools.length > 0 ||
+    (summary.partialSuccessTools?.length ?? 0) > 0 ||
+    (summary.skippedTools?.length ?? 0) > 0;
+  const reconciliationStatusResult = getToolResult(results, OPS_TOOL_NAMES.getReconciliationStatus);
 
   if (
-    summary.failedTools.includes(OPS_TOOL_NAMES.getAuditLogs) &&
+    (summary.failedTools.includes(OPS_TOOL_NAMES.getAuditLogs) ||
+      summary.partialSuccessTools?.includes(OPS_TOOL_NAMES.getAuditLogs)) &&
     data.audit === undefined
   ) {
     appendNote(notes, "Audit log data was unavailable.");
   }
 
   if (
-    summary.failedTools.includes(OPS_TOOL_NAMES.getReconciliationStatus) &&
+    reconciliationStatusResult?.error?.code === "permission_denied"
+  ) {
+    appendNote(notes, "Reconciliation status could not be accessed due to permissions.");
+  } else if (
+    (summary.failedTools.includes(OPS_TOOL_NAMES.getReconciliationStatus) ||
+      summary.partialSuccessTools?.includes(OPS_TOOL_NAMES.getReconciliationStatus)) &&
     data.reconciliationStatus === undefined
   ) {
     appendNote(notes, "Reconciliation status data was unavailable.");
   }
 
   if (
-    summary.failedTools.includes(OPS_TOOL_NAMES.getBufferedRecords) &&
+    (summary.failedTools.includes(OPS_TOOL_NAMES.getBufferedRecords) ||
+      summary.partialSuccessTools?.includes(OPS_TOOL_NAMES.getBufferedRecords)) &&
     data.bufferedRecords === undefined
   ) {
     appendNote(notes, "Buffered reconciliation records were unavailable.");
   }
 
   if (
-    summary.failedTools.includes(OPS_TOOL_NAMES.getReconciledRecords) &&
+    (summary.failedTools.includes(OPS_TOOL_NAMES.getReconciledRecords) ||
+      summary.partialSuccessTools?.includes(OPS_TOOL_NAMES.getReconciledRecords)) &&
     data.reconciledRecords === undefined
   ) {
     appendNote(notes, "Reconciled records were unavailable.");
   }
 
   if (
-    summary.failedTools.includes(OPS_TOOL_NAMES.getInvalidProductBrandCards) &&
+    (summary.failedTools.includes(OPS_TOOL_NAMES.getInvalidProductBrandCards) ||
+      summary.partialSuccessTools?.includes(OPS_TOOL_NAMES.getInvalidProductBrandCards)) &&
     data.invalidProductBrandCards === undefined
   ) {
     appendNote(notes, "Invalid product-brand card data was unavailable.");
   }
 
   if (
-    summary.failedTools.includes(OPS_TOOL_NAMES.getExpiredCards) &&
+    (summary.failedTools.includes(OPS_TOOL_NAMES.getExpiredCards) ||
+      summary.partialSuccessTools?.includes(OPS_TOOL_NAMES.getExpiredCards)) &&
     data.expiredCards === undefined
   ) {
     appendNote(notes, "Expired card data was unavailable.");
   }
 
   if (
-    summary.failedTools.includes(OPS_TOOL_NAMES.getSystemCardsSummaryReconcileSupplier) &&
+    (summary.failedTools.includes(OPS_TOOL_NAMES.getSystemCardsSummaryReconcileSupplier) ||
+      summary.partialSuccessTools?.includes(OPS_TOOL_NAMES.getSystemCardsSummaryReconcileSupplier)) &&
     data.reconciliationSummary === undefined
   ) {
     appendNote(notes, "Reconciliation supplier summary data was unavailable.");
   }
 
   if (
-    summary.failedTools.includes(OPS_TOOL_NAMES.getBillingOrder) &&
+    (summary.failedTools.includes(OPS_TOOL_NAMES.getBillingOrder) ||
+      summary.partialSuccessTools?.includes(OPS_TOOL_NAMES.getBillingOrder)) &&
     data.billing === undefined
   ) {
     appendNote(notes, "Billing data was unavailable.");
   }
 
   if (
-    summary.failedTools.includes(OPS_TOOL_NAMES.getOrderCards) &&
+    (summary.failedTools.includes(OPS_TOOL_NAMES.getOrderCards) ||
+      summary.partialSuccessTools?.includes(OPS_TOOL_NAMES.getOrderCards)) &&
     data.cards === undefined
   ) {
     appendNote(notes, "Card data could not be retrieved.");
   }
 
   if (
-    summary.failedTools.includes(OPS_TOOL_NAMES.getOrderItemsInfo) &&
+    (summary.failedTools.includes(OPS_TOOL_NAMES.getOrderItemsInfo) ||
+      summary.partialSuccessTools?.includes(OPS_TOOL_NAMES.getOrderItemsInfo)) &&
     data.items === undefined
   ) {
     appendNote(notes, "Item data could not be retrieved.");
   }
 
   if (
-    summary.failedTools.includes(OPS_TOOL_NAMES.getOrderDetails) &&
+    (summary.failedTools.includes(OPS_TOOL_NAMES.getOrderDetails) ||
+      summary.partialSuccessTools?.includes(OPS_TOOL_NAMES.getOrderDetails)) &&
     data.order === undefined
   ) {
     appendNote(notes, "Order detail data was unavailable.");
@@ -313,7 +341,9 @@ function buildOrderNotes(
 
   if (
     (summary.failedTools.includes(OPS_TOOL_NAMES.getOrderHistory) ||
-      summary.failedTools.includes(OPS_TOOL_NAMES.getClientOrderHistory)) &&
+      summary.failedTools.includes(OPS_TOOL_NAMES.getClientOrderHistory) ||
+      summary.partialSuccessTools?.includes(OPS_TOOL_NAMES.getOrderHistory) ||
+      summary.partialSuccessTools?.includes(OPS_TOOL_NAMES.getClientOrderHistory)) &&
     data.history === undefined
   ) {
     appendNote(notes, "Order history data was unavailable.");
@@ -364,8 +394,8 @@ function buildOrderNotes(
     appendNote(notes, "No successful tool data was available.");
   }
 
-  if (hasFailures) {
-    appendNote(notes, "Some requested tool calls failed.");
+  if (hasMissingData) {
+    appendNote(notes, "Some data could not be fetched.");
   }
 
   return notes;
@@ -374,8 +404,12 @@ function buildOrderNotes(
 function buildGenericNotes(plan: ExecutionPlan, summary: PackedExecutionSummary) {
   const notes = [...(plan.notes ?? [])];
 
-  if (summary.failedTools.length > 0 || (summary.skippedTools?.length ?? 0) > 0) {
-    appendNote(notes, "Some requested tool calls failed.");
+  if (
+    summary.failedTools.length > 0 ||
+    (summary.partialSuccessTools?.length ?? 0) > 0 ||
+    (summary.skippedTools?.length ?? 0) > 0
+  ) {
+    appendNote(notes, "Some data could not be fetched.");
   }
 
   return notes;
@@ -398,7 +432,7 @@ export function packExecutionContext(
       executionSummary: summary,
       data,
       sources,
-      notes: buildOrderNotes(plan, summary, data),
+      notes: buildOrderNotes(plan, summary, execution.results, data),
     };
   }
 
