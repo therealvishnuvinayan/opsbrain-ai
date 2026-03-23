@@ -1,3 +1,5 @@
+import type { OpsDomain } from "@/lib/ops/types";
+
 export interface OrderStatusCount {
   status: string;
   count: number;
@@ -48,8 +50,21 @@ export interface AuditSummary {
   noEvents: boolean;
 }
 
-export interface OrderAnalytics {
-  domain: "orders";
+export interface ReconciliationSummary {
+  historyId?: string;
+  status?: string;
+  totalBufferedRecords?: number;
+  totalReconciledRecords?: number;
+  invalidProductBrandCardCount?: number;
+  expiredCardCount?: number;
+  supplierRows?: number;
+  appearsIncomplete: boolean;
+  hasInvalidProductBrandCards: boolean;
+  hasExpiredCards: boolean;
+}
+
+export interface OpsAnalytics {
+  domain: OpsDomain;
   intent: string;
   summary: string;
   patterns: string[];
@@ -60,4 +75,7 @@ export interface OrderAnalytics {
   statusSummary?: OrderStatusSummary;
   detailSummary?: OrderDetailSummary;
   auditSummary?: AuditSummary;
+  reconciliationSummary?: ReconciliationSummary;
 }
+
+export type OrderAnalytics = OpsAnalytics;

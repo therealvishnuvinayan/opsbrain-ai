@@ -5,8 +5,8 @@ import {
   buildPackedOrderPrompt,
 } from "@/lib/ai/order-prompt";
 import { resolveAiQuery } from "@/lib/ai/query";
-import { analyzeOrderContext } from "@/lib/ops/analytics/analyze-order-context";
-import type { OrderAnalytics } from "@/lib/ops/analytics/analytics-types";
+import { analyzeOpsContext } from "@/lib/ops/analytics/analyze-ops-context";
+import type { OpsAnalytics } from "@/lib/ops/analytics/analytics-types";
 import { packExecutionContext } from "@/lib/ops/context/pack-execution-context";
 import type { PackedOpsContext, PackedOrderData } from "@/lib/ops/context/context-types";
 import { executePlan, type ExecutePlanOptions } from "@/lib/ops/executor/execute-plan";
@@ -32,6 +32,11 @@ export type RunOpsQueryResult =
       sources: RunOpsQuerySource[];
     }
   | {
+      type: "missing_history_id";
+      answer: string;
+      sources: RunOpsQuerySource[];
+    }
+  | {
       type: "resolved";
       prompt: {
         system: string;
@@ -43,7 +48,7 @@ export type RunOpsQueryResult =
       plan?: ExecutionPlan;
       execution?: ExecutionRunResult;
       packedContext?: PackedOpsContext<PackedOrderData>;
-      analytics?: OrderAnalytics;
+      analytics?: OpsAnalytics;
     };
 
 interface RunOpsQueryOptions {
@@ -61,24 +66,35 @@ function isMissingOrderIdPlan(plan: ExecutionPlan) {
   );
 }
 
-function supportsOrchestratedOrdersPlan(plan: ExecutionPlan) {
+function isMissingHistoryIdPlan(plan: ExecutionPlan) {
+  return plan.tools.length === 0 && plan.intent.startsWith("reconciliation_");
+}
+
+function supportsOrchestratedOpsPlan(plan: ExecutionPlan) {
   return (
-    plan.domain === "orders" &&
+    (plan.domain === "orders" || plan.domain === "reconciliation") &&
     (plan.intent === "order_history" ||
       plan.intent === "order_detail" ||
       plan.intent === "order_issue_investigation" ||
-      plan.intent === "order_audit_activity")
+      plan.intent === "order_audit_activity" ||
+      plan.intent.startsWith("reconciliation_"))
   );
 }
 
-function hasMeaningfulPackedOrderData(context: PackedOpsContext<PackedOrderData>) {
+function hasMeaningfulPackedOpsData(context: PackedOpsContext<PackedOrderData>) {
   return Boolean(
     context.data.history ||
       context.data.order ||
       context.data.billing ||
       context.data.cards ||
       context.data.items ||
-      context.data.audit
+      context.data.audit ||
+      context.data.reconciliationStatus ||
+      context.data.bufferedRecords ||
+      context.data.reconciledRecords ||
+      context.data.invalidProductBrandCards ||
+      context.data.expiredCards ||
+      context.data.reconciliationSummary
   );
 }
 
@@ -116,21 +132,32 @@ export async function runOpsQuery(
     };
   }
 
-  if (!supportsOrchestratedOrdersPlan(plan)) {
+  if (isMissingHistoryIdPlan(plan)) {
+    return {
+      type: "missing_history_id",
+      answer:
+        "Please include the reconciliation history id. This first version supports reconciliation checks by history id.",
+      sources: [],
+    };
+  }
+
+  if (!supportsOrchestratedOpsPlan(plan)) {
     return resolveLegacyQuery(question);
   }
 
   const execution = await executePlan(plan, options.executePlanOptions);
   const packedContext = packExecutionContext(plan, execution) as PackedOpsContext<PackedOrderData>;
-  const analytics = analyzeOrderContext(packedContext);
-  const hasMeaningfulData = hasMeaningfulPackedOrderData(packedContext);
+  const analytics = analyzeOpsContext(packedContext);
+  const hasMeaningfulData = hasMeaningfulPackedOpsData(packedContext);
 
   return {
     type: "resolved",
     prompt: buildPackedOrderPrompt(question, packedContext, analytics),
     fallbackAnswer: hasMeaningfulData
       ? buildPackedOrderFallbackAnswer(packedContext, analytics)
-      : "I couldn't retrieve Bamboo order data right now. Please try again in a moment.",
+      : plan.domain === "reconciliation"
+        ? "I couldn't retrieve Bamboo reconciliation data right now. Please try again in a moment."
+        : "I couldn't retrieve Bamboo order data right now. Please try again in a moment.",
     useFallbackOnly: !hasMeaningfulData,
     sources: packedContext.sources,
     plan,

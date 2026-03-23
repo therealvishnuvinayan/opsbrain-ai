@@ -30,7 +30,11 @@ export async function POST(request: Request) {
   try {
     const result = await runOpsQuery(question);
 
-    if (result.type === "missing_order_id" || result.type === "unsupported") {
+    if (
+      result.type === "missing_order_id" ||
+      result.type === "missing_history_id" ||
+      result.type === "unsupported"
+    ) {
       return NextResponse.json({
         answer: result.answer,
         sources: result.sources,
@@ -60,7 +64,7 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({
-      answer: "I couldn't retrieve Bamboo order data right now. Please try again in a moment.",
+      answer: "I couldn't retrieve Bamboo ops data right now. Please try again in a moment.",
       sources: [],
     });
   }

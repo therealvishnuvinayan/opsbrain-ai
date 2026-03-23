@@ -12,6 +12,27 @@ const INVALID_ORDER_ID_TOKENS = new Set([
   "status",
   "cards",
   "card",
+  "failed",
+  "failure",
+  "reconciliation",
+  "buffered",
+  "reconciled",
+]);
+
+const INVALID_HISTORY_ID_TOKENS = new Set([
+  "history",
+  "reconciliation",
+  "status",
+  "buffered",
+  "reconciled",
+  "records",
+  "record",
+  "invalid",
+  "expired",
+  "cards",
+  "card",
+  "issue",
+  "issues",
 ]);
 
 function startOfDay(date: Date) {
@@ -70,8 +91,45 @@ function extractOrderId(question: string) {
     return orderNumberMatch[1];
   }
 
-  const bareIdMatch = question.match(/\b(\d{3,}|[a-z0-9]{8,})\b/i);
-  return normalizeCandidateOrderId(bareIdMatch?.[1]);
+  return undefined;
+}
+
+function normalizeCandidateHistoryId(value?: string | null) {
+  if (!value) {
+    return undefined;
+  }
+
+  const normalized = value.trim().replace(/[.,!?]+$/, "");
+
+  if (!normalized) {
+    return undefined;
+  }
+
+  if (INVALID_HISTORY_ID_TOKENS.has(normalized.toLowerCase())) {
+    return undefined;
+  }
+
+  return normalized;
+}
+
+function extractHistoryId(question: string) {
+  const explicitPatterns = [
+    /\breconciliation\s+history\s+(?:id|number|no\.?)\s*[:#-]?\s*([a-z0-9-]{1,})\b/i,
+    /\bhistory\s+(?:id|number|no\.?)\s*[:#-]?\s*([a-z0-9-]{1,})\b/i,
+    /\bhistory\s+([a-z0-9-]{1,})\b/i,
+    /\bfor\s+history\s+([a-z0-9-]{1,})\b/i,
+  ];
+
+  for (const pattern of explicitPatterns) {
+    const match = question.match(pattern);
+    const candidate = normalizeCandidateHistoryId(match?.[1]);
+
+    if (candidate) {
+      return candidate;
+    }
+  }
+
+  return undefined;
 }
 
 function applyDateWindow(question: string, filters: OrderHistoryFilters = {}) {
@@ -344,9 +402,215 @@ function buildAuditActivityPlan(question: string, orderId?: string): ExecutionPl
   };
 }
 
+function buildReconciliationPlan(
+  question: string,
+  historyId: string | undefined,
+  options?: {
+    orderId?: string;
+    includeAudit?: boolean;
+  }
+): ExecutionPlan {
+  const normalized = question.trim().toLowerCase();
+  const orderId = options?.orderId;
+  const includeAudit = Boolean(options?.includeAudit);
+
+  if (!historyId) {
+    return {
+      intent: "reconciliation_investigation",
+      domain: "reconciliation",
+      entities: {},
+      tools: [],
+      confidence: 0.28,
+      notes: ["Reconciliation query matched, but no reconciliation history id could be extracted."],
+    };
+  }
+
+  const asksForBufferedRecords = hasAnyKeyword(normalized, [
+    "buffered record",
+    "buffered records",
+    "buffered",
+  ]);
+  const asksForReconciledRecords = hasAnyKeyword(normalized, [
+    "reconciled record",
+    "reconciled records",
+    "reconciled",
+  ]);
+  const asksForInvalidProductBrandCards = hasAnyKeyword(normalized, [
+    "invalid product brand",
+    "invalid product-brand",
+    "invalid product",
+    "product brand",
+  ]);
+  const asksForExpiredCards = hasAnyKeyword(normalized, [
+    "expired card",
+    "expired cards",
+  ]);
+  const asksForSupplierSummary = hasAnyKeyword(normalized, [
+    "supplier summary",
+    "supplier",
+    "system cards summary",
+    "summary",
+  ]);
+  const asksForStatus = hasAnyKeyword(normalized, [
+    "reconciliation status",
+    "status for history",
+    "show reconciliation status",
+  ]);
+  const asksWhyFailing = hasAnyKeyword(normalized, [
+    "why is reconciliation failing",
+    "reconciliation failing",
+    "reconciliation issue",
+    "reconciliation problem",
+    "any reconciliation issue",
+    "failed",
+  ]);
+
+  let intent = "reconciliation_investigation";
+
+  if (asksForBufferedRecords && !asksForReconciledRecords && !asksWhyFailing) {
+    intent = "reconciliation_buffered_records";
+  } else if (asksForReconciledRecords && !asksForBufferedRecords && !asksWhyFailing) {
+    intent = "reconciliation_reconciled_records";
+  } else if (
+    asksForStatus &&
+    !asksForBufferedRecords &&
+    !asksForReconciledRecords &&
+    !asksForInvalidProductBrandCards &&
+    !asksForExpiredCards
+  ) {
+    intent = "reconciliation_status";
+  }
+
+  const tools: PlannedToolCall[] = [];
+
+  if (orderId) {
+    tools.push(
+      buildToolCall(
+        OPS_TOOL_NAMES.getOrderDetails,
+        "Fetch the linked order detail record so reconciliation findings can be interpreted against the order state.",
+        { orderId }
+      )
+    );
+
+    if (
+      normalized.includes("payment") ||
+      normalized.includes("billing") ||
+      normalized.includes("failed") ||
+      normalized.includes("fail")
+    ) {
+      tools.push(
+        buildToolCall(
+          OPS_TOOL_NAMES.getBillingOrder,
+          "Fetch billing data to compare payment state with reconciliation findings.",
+          { orderId }
+        )
+      );
+    }
+  }
+
+  if (asksForStatus || asksWhyFailing || asksForBufferedRecords || asksForReconciledRecords) {
+    tools.push(
+      buildToolCall(
+        OPS_TOOL_NAMES.getReconciliationStatus,
+        "Fetch the overall reconciliation status for the requested history id.",
+        { historyId }
+      )
+    );
+  }
+
+  if (asksForBufferedRecords || asksWhyFailing) {
+    tools.push(
+      buildToolCall(
+        OPS_TOOL_NAMES.getBufferedRecords,
+        "Fetch buffered reconciliation records to see whether this history is still waiting on unresolved items.",
+        { historyId }
+      )
+    );
+  }
+
+  if (asksForReconciledRecords || asksWhyFailing) {
+    tools.push(
+      buildToolCall(
+        OPS_TOOL_NAMES.getReconciledRecords,
+        "Fetch reconciled records to compare completed activity against unresolved reconciliation items.",
+        { historyId }
+      )
+    );
+  }
+
+  if (asksForInvalidProductBrandCards || asksWhyFailing || intent === "reconciliation_status") {
+    tools.push(
+      buildToolCall(
+        OPS_TOOL_NAMES.getInvalidProductBrandCards,
+        "Fetch invalid product-brand card issues related to this reconciliation history.",
+        { historyId }
+      )
+    );
+  }
+
+  if (asksForExpiredCards || asksWhyFailing || intent === "reconciliation_status") {
+    tools.push(
+      buildToolCall(
+        OPS_TOOL_NAMES.getExpiredCards,
+        "Fetch expired card issues related to this reconciliation history.",
+        { historyId }
+      )
+    );
+  }
+
+  if (asksForSupplierSummary || asksWhyFailing || intent === "reconciliation_status") {
+    tools.push(
+      buildToolCall(
+        OPS_TOOL_NAMES.getSystemCardsSummaryReconcileSupplier,
+        "Fetch supplier-level reconciliation summary signals for this history.",
+        { historyId }
+      )
+    );
+  }
+
+  if (orderId && includeAudit) {
+    tools.push(
+      buildToolCall(
+        OPS_TOOL_NAMES.getAuditLogs,
+        "Fetch audit activity so reconciliation findings can be compared with order activity.",
+        {
+          OrderId: orderId,
+          EntityId: orderId,
+          EntityType: "order",
+          SearchText: orderId,
+          PageSize: 20,
+          PageIndex: 0,
+        }
+      )
+    );
+  }
+
+  return {
+    intent,
+    domain: orderId ? "orders" : "reconciliation",
+    entities: {
+      historyId,
+      orderId: orderId ?? null,
+      includeAudit,
+      asksForBufferedRecords,
+      asksForReconciledRecords,
+      asksForInvalidProductBrandCards,
+      asksForExpiredCards,
+    },
+    tools,
+    confidence: 0.91,
+    notes: ["Deterministic reconciliation plan for a single reconciliation history id."],
+  };
+}
+
 export function buildOrderPlan(question: string): ExecutionPlan {
   const normalized = question.trim().toLowerCase();
-  const orderId = normalized.includes("order") ? extractOrderId(question) : extractOrderId(question);
+  const hasOrderCue = normalized.includes("order") || /\bO-\d{3,}\b/i.test(question);
+  const orderId = hasOrderCue ? extractOrderId(question) : undefined;
+  const historyId =
+    normalized.includes("history") || normalized.includes("reconciliation")
+      ? extractHistoryId(question)
+      : undefined;
   const useClientHistory = normalized.includes("client order");
   const asksForHistory = hasAnyKeyword(normalized, [
     "recent order",
@@ -389,6 +653,23 @@ export function buildOrderPlan(question: string): ExecutionPlan {
       "log",
       "logs",
     ]);
+  const asksForReconciliation = hasAnyKeyword(normalized, [
+    "reconciliation",
+    "buffered records",
+    "buffered",
+    "reconciled records",
+    "invalid product brand",
+    "invalid product-brand",
+    "expired cards",
+    "expired card",
+  ]);
+
+  if (asksForReconciliation) {
+    return buildReconciliationPlan(question, historyId, {
+      orderId,
+      includeAudit: asksForAuditActivity,
+    });
+  }
 
   if (asksForAuditActivity) {
     return buildAuditActivityPlan(question, orderId);

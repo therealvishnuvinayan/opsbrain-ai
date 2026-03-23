@@ -58,6 +58,18 @@ function getSourceLabel(toolName: string) {
       return "Audit logs";
     case OPS_TOOL_NAMES.getAuditLogById:
       return "Audit event";
+    case OPS_TOOL_NAMES.getReconciliationStatus:
+      return "Reconciliation status";
+    case OPS_TOOL_NAMES.getBufferedRecords:
+      return "Buffered reconciliation records";
+    case OPS_TOOL_NAMES.getReconciledRecords:
+      return "Reconciled records";
+    case OPS_TOOL_NAMES.getInvalidProductBrandCards:
+      return "Invalid product-brand cards";
+    case OPS_TOOL_NAMES.getExpiredCards:
+      return "Expired cards";
+    case OPS_TOOL_NAMES.getSystemCardsSummaryReconcileSupplier:
+      return "Reconciliation supplier summary";
     default:
       return undefined;
   }
@@ -162,6 +174,24 @@ function packOrderData(results: ToolExecutionResult[]): PackedOrderData {
       case OPS_TOOL_NAMES.getAuditLogById:
         data.audit = result.data;
         break;
+      case OPS_TOOL_NAMES.getReconciliationStatus:
+        data.reconciliationStatus = result.data;
+        break;
+      case OPS_TOOL_NAMES.getBufferedRecords:
+        data.bufferedRecords = result.data;
+        break;
+      case OPS_TOOL_NAMES.getReconciledRecords:
+        data.reconciledRecords = result.data;
+        break;
+      case OPS_TOOL_NAMES.getInvalidProductBrandCards:
+        data.invalidProductBrandCards = result.data;
+        break;
+      case OPS_TOOL_NAMES.getExpiredCards:
+        data.expiredCards = result.data;
+        break;
+      case OPS_TOOL_NAMES.getSystemCardsSummaryReconcileSupplier:
+        data.reconciliationSummary = result.data;
+        break;
       default:
         break;
     }
@@ -212,6 +242,48 @@ function buildOrderNotes(
   }
 
   if (
+    summary.failedTools.includes(OPS_TOOL_NAMES.getReconciliationStatus) &&
+    data.reconciliationStatus === undefined
+  ) {
+    appendNote(notes, "Reconciliation status data was unavailable.");
+  }
+
+  if (
+    summary.failedTools.includes(OPS_TOOL_NAMES.getBufferedRecords) &&
+    data.bufferedRecords === undefined
+  ) {
+    appendNote(notes, "Buffered reconciliation records were unavailable.");
+  }
+
+  if (
+    summary.failedTools.includes(OPS_TOOL_NAMES.getReconciledRecords) &&
+    data.reconciledRecords === undefined
+  ) {
+    appendNote(notes, "Reconciled records were unavailable.");
+  }
+
+  if (
+    summary.failedTools.includes(OPS_TOOL_NAMES.getInvalidProductBrandCards) &&
+    data.invalidProductBrandCards === undefined
+  ) {
+    appendNote(notes, "Invalid product-brand card data was unavailable.");
+  }
+
+  if (
+    summary.failedTools.includes(OPS_TOOL_NAMES.getExpiredCards) &&
+    data.expiredCards === undefined
+  ) {
+    appendNote(notes, "Expired card data was unavailable.");
+  }
+
+  if (
+    summary.failedTools.includes(OPS_TOOL_NAMES.getSystemCardsSummaryReconcileSupplier) &&
+    data.reconciliationSummary === undefined
+  ) {
+    appendNote(notes, "Reconciliation supplier summary data was unavailable.");
+  }
+
+  if (
     summary.failedTools.includes(OPS_TOOL_NAMES.getBillingOrder) &&
     data.billing === undefined
   ) {
@@ -247,8 +319,32 @@ function buildOrderNotes(
     appendNote(notes, "Order history data was unavailable.");
   }
 
-  if (data.history !== undefined && data.order === undefined && data.billing === undefined) {
+  if (
+    data.history !== undefined &&
+    data.order === undefined &&
+    data.billing === undefined &&
+    data.reconciliationStatus === undefined &&
+    data.bufferedRecords === undefined &&
+    data.reconciledRecords === undefined &&
+    data.invalidProductBrandCards === undefined &&
+    data.expiredCards === undefined &&
+    data.reconciliationSummary === undefined
+  ) {
     appendNote(notes, "Only order history data was available.");
+  }
+
+  if (
+    data.history === undefined &&
+    data.order === undefined &&
+    data.billing === undefined &&
+    data.reconciliationStatus !== undefined &&
+    data.bufferedRecords === undefined &&
+    data.reconciledRecords === undefined &&
+    data.invalidProductBrandCards === undefined &&
+    data.expiredCards === undefined &&
+    data.reconciliationSummary === undefined
+  ) {
+    appendNote(notes, "Only reconciliation status data was available.");
   }
 
   if (
@@ -257,7 +353,13 @@ function buildOrderNotes(
     data.billing === undefined &&
     data.cards === undefined &&
     data.items === undefined &&
-    data.audit === undefined
+    data.audit === undefined &&
+    data.reconciliationStatus === undefined &&
+    data.bufferedRecords === undefined &&
+    data.reconciledRecords === undefined &&
+    data.invalidProductBrandCards === undefined &&
+    data.expiredCards === undefined &&
+    data.reconciliationSummary === undefined
   ) {
     appendNote(notes, "No successful tool data was available.");
   }
@@ -286,7 +388,7 @@ export function packExecutionContext(
   const summary = buildExecutionSummary(execution.results);
   const sources = collectPackedSources(execution.results);
 
-  if (plan.domain === "orders") {
+  if (plan.domain === "orders" || plan.domain === "reconciliation") {
     const data = packOrderData(execution.results);
 
     return {

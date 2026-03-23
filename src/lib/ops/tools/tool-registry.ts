@@ -15,6 +15,17 @@ import {
   type OrderHistoryFilters,
 } from "@/lib/bamboo/orders";
 import {
+  getBufferedRecords,
+  getExpiredCards,
+  getInvalidProductBrandCards,
+  getReconciledRecords,
+  getReconciliationStatus,
+  getSystemCardsSummaryReconcileSupplier,
+  type NormalizedReconciliationRecords,
+  type NormalizedReconciliationStatus,
+  type NormalizedReconciliationSupplierSummary,
+} from "@/lib/bamboo/reconciliation";
+import {
   OPS_TOOL_NAMES,
   type RegisteredToolDefinition,
   type ToolDefinition,
@@ -64,6 +75,25 @@ type AuditLogByIdParams = {
 type AuditLogsResult = Awaited<ReturnType<typeof getAuditLogs>>;
 type AuditLogByIdResult = {
   context: NormalizedAuditLogEntry | undefined;
+  sources: Array<{ type: "swagger"; endpoint: string }>;
+};
+
+type HistoryIdParams = {
+  historyId: string;
+};
+
+type ReconciliationStatusResult = {
+  context: NormalizedReconciliationStatus;
+  sources: Array<{ type: "swagger"; endpoint: string }>;
+};
+
+type ReconciliationRecordsResult = {
+  context: NormalizedReconciliationRecords;
+  sources: Array<{ type: "swagger"; endpoint: string }>;
+};
+
+type ReconciliationSupplierSummaryResult = {
+  context: NormalizedReconciliationSupplierSummary;
   sources: Array<{ type: "swagger"; endpoint: string }>;
 };
 
@@ -202,6 +232,69 @@ const getAuditLogByIdTool: ToolDefinition<AuditLogByIdParams, AuditLogByIdResult
   execute: async ({ id }) => getAuditLogById(id),
 };
 
+const getReconciliationStatusTool: ToolDefinition<
+  HistoryIdParams,
+  ReconciliationStatusResult
+> = {
+  name: OPS_TOOL_NAMES.getReconciliationStatus,
+  domain: "reconciliation",
+  description: "Fetch the overall Bamboo reconciliation status for a reconciliation history id.",
+  requiredParams: ["historyId"],
+  sourceType: "swagger",
+  execute: async ({ historyId }) => getReconciliationStatus(historyId),
+};
+
+const getBufferedRecordsTool: ToolDefinition<HistoryIdParams, ReconciliationRecordsResult> = {
+  name: OPS_TOOL_NAMES.getBufferedRecords,
+  domain: "reconciliation",
+  description: "Fetch buffered reconciliation records for a reconciliation history id.",
+  requiredParams: ["historyId"],
+  sourceType: "swagger",
+  execute: async ({ historyId }) => getBufferedRecords(historyId),
+};
+
+const getReconciledRecordsTool: ToolDefinition<HistoryIdParams, ReconciliationRecordsResult> = {
+  name: OPS_TOOL_NAMES.getReconciledRecords,
+  domain: "reconciliation",
+  description: "Fetch reconciled records for a reconciliation history id.",
+  requiredParams: ["historyId"],
+  sourceType: "swagger",
+  execute: async ({ historyId }) => getReconciledRecords(historyId),
+};
+
+const getInvalidProductBrandCardsTool: ToolDefinition<
+  HistoryIdParams,
+  ReconciliationRecordsResult
+> = {
+  name: OPS_TOOL_NAMES.getInvalidProductBrandCards,
+  domain: "reconciliation",
+  description: "Fetch invalid product-brand card issues for a reconciliation history id.",
+  requiredParams: ["historyId"],
+  sourceType: "swagger",
+  execute: async ({ historyId }) => getInvalidProductBrandCards(historyId),
+};
+
+const getExpiredCardsTool: ToolDefinition<HistoryIdParams, ReconciliationRecordsResult> = {
+  name: OPS_TOOL_NAMES.getExpiredCards,
+  domain: "reconciliation",
+  description: "Fetch expired card issues for a reconciliation history id.",
+  requiredParams: ["historyId"],
+  sourceType: "swagger",
+  execute: async ({ historyId }) => getExpiredCards(historyId),
+};
+
+const getSystemCardsSummaryReconcileSupplierTool: ToolDefinition<
+  HistoryIdParams,
+  ReconciliationSupplierSummaryResult
+> = {
+  name: OPS_TOOL_NAMES.getSystemCardsSummaryReconcileSupplier,
+  domain: "reconciliation",
+  description: "Fetch supplier-level reconciliation summary signals for a reconciliation history id.",
+  requiredParams: ["historyId"],
+  sourceType: "swagger",
+  execute: async ({ historyId }) => getSystemCardsSummaryReconcileSupplier(historyId),
+};
+
 export const opsToolRegistry = [
   getOrderHistoryTool,
   getClientOrderHistoryTool,
@@ -211,6 +304,12 @@ export const opsToolRegistry = [
   getBillingOrderTool,
   getAuditLogsTool,
   getAuditLogByIdTool,
+  getReconciliationStatusTool,
+  getBufferedRecordsTool,
+  getReconciledRecordsTool,
+  getInvalidProductBrandCardsTool,
+  getExpiredCardsTool,
+  getSystemCardsSummaryReconcileSupplierTool,
 ] satisfies readonly RegisteredToolDefinition[];
 
 const toolRegistryByName = new Map<string, RegisteredToolDefinition>(

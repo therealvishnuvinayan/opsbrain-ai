@@ -6,7 +6,7 @@ import type {
   OrderPatternAnalysis,
   OrderTrendAnalysis,
 } from "@/lib/bamboo/orders";
-import type { OrderAnalytics } from "@/lib/ops/analytics/analytics-types";
+import type { OpsAnalytics } from "@/lib/ops/analytics/analytics-types";
 import type { PackedOpsContext, PackedOrderData } from "@/lib/ops/context/context-types";
 
 function joinExamples(values: string[], max = 3) {
@@ -395,20 +395,22 @@ function buildPackedOrderAvailabilityNote(notes: string[]) {
 export function buildPackedOrderPrompt(
   question: string,
   context: PackedOpsContext<PackedOrderData>,
-  analytics: OrderAnalytics
+  analytics: OpsAnalytics
 ) {
   return {
     system: [
       "You are Bamboo AI, a helpful teammate for operations users.",
-      "Answer only from the packed order context and structured order analytics you are given.",
+      "Answer only from the packed ops context and structured analytics you are given.",
       "Use simple English and keep the answer short and clear.",
       "Be direct and confident.",
       "Use the analytics as the primary interpretation layer and the packed context as supporting evidence.",
       "Start with what is happening in plain language.",
       "Then explain the main issue or pattern in simple words.",
-      "Mention up to 2 or 3 example order ids when useful.",
+      "Mention up to 2 or 3 example ids when useful.",
       "If audit activity is present, explain what it suggests in simple words.",
       "If audit activity is missing, say that briefly when it matters.",
+      "If reconciliation data is present, explain the main reconciliation signal in simple words.",
+      "If reconciliation still has buffered records or invalid mappings, say that clearly.",
       "If some requested data was unavailable, mention that briefly only when relevant.",
       "Format the answer with a blank line between sections.",
       "Write the final 'You should check:' section as bullet points, with one bullet on each line.",
@@ -418,14 +420,14 @@ export function buildPackedOrderPrompt(
     ].join(" "),
     user: [
       `User question: ${question}`,
-      "Structured order analytics:",
+      "Structured analytics:",
       JSON.stringify(analytics, null, 2),
-      "Packed order context:",
+      "Packed ops context:",
       JSON.stringify(context, null, 2),
       "Write a short answer in this order:",
       "1. what is happening",
       "2. the main issue or pattern",
-      "3. example orders if useful",
+      "3. example ids if useful",
       "4. what to check next",
       "Use the structured analytics first and only use the packed context to support it.",
     ].join("\n\n"),
@@ -434,12 +436,12 @@ export function buildPackedOrderPrompt(
 
 export function buildPackedOrderFallbackAnswer(
   context: PackedOpsContext<PackedOrderData>,
-  analytics: OrderAnalytics
+  analytics: OpsAnalytics
 ) {
   const availabilityNote = buildPackedOrderAvailabilityNote(analytics.notes);
   const examplesLine =
     analytics.examples.length > 0
-      ? `Example orders: ${joinExamples(analytics.examples)}.`
+      ? `Examples: ${joinExamples(analytics.examples)}.`
       : "";
   const nextChecksLine =
     analytics.nextChecks.length > 0 ? formatCheckList(analytics.nextChecks) : "";
