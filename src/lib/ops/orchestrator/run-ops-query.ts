@@ -11,6 +11,8 @@ import { packExecutionContext } from "@/lib/ops/context/pack-execution-context";
 import type { PackedOpsContext, PackedOrderData } from "@/lib/ops/context/context-types";
 import { executePlan, type ExecutePlanOptions } from "@/lib/ops/executor/execute-plan";
 import type { ExecutionRunResult } from "@/lib/ops/executor/execution-types";
+import { buildOpsQueryTrace } from "@/lib/ops/observability/build-trace";
+import type { OpsQueryTrace } from "@/lib/ops/observability/trace-types";
 import { buildOpsPlan } from "@/lib/ops/planner/build-ops-plan";
 import type { ExecutionPlan } from "@/lib/ops/planner/plan-types";
 
@@ -21,20 +23,23 @@ type RunOpsQuerySource = {
 };
 
 export type RunOpsQueryResult =
-  | {
+    | {
       type: "unsupported";
       answer: string;
       sources: RunOpsQuerySource[];
+      trace: OpsQueryTrace;
     }
   | {
       type: "missing_order_id";
       answer: string;
       sources: RunOpsQuerySource[];
+      trace: OpsQueryTrace;
     }
   | {
       type: "missing_history_id";
       answer: string;
       sources: RunOpsQuerySource[];
+      trace: OpsQueryTrace;
     }
   | {
       type: "resolved";
@@ -49,6 +54,7 @@ export type RunOpsQueryResult =
       execution?: ExecutionRunResult;
       packedContext?: PackedOpsContext<PackedOrderData>;
       analytics?: OpsAnalytics;
+      trace: OpsQueryTrace;
     };
 
 interface RunOpsQueryOptions {
@@ -111,11 +117,29 @@ function hasMeaningfulPackedOpsData(context: PackedOpsContext<PackedOrderData>) 
   );
 }
 
-async function resolveLegacyQuery(question: string): Promise<RunOpsQueryResult> {
+async function resolveLegacyQuery(question: string, queryId: string, totalStartMs: number): Promise<RunOpsQueryResult> {
   const legacyResult = await resolveAiQuery(question);
+  const totalMs = Math.round(performance.now() - totalStartMs);
+  const trace = buildOpsQueryTrace({
+    queryId,
+    question,
+    resultType: legacyResult.type === "resolved" ? "legacy_resolved" : legacyResult.type,
+    totalMs,
+    timings: {
+      planningMs: totalMs,
+      executionMs: 0,
+      packingMs: 0,
+      analyticsMs: 0,
+    },
+    usedFallback: false,
+    noMeaningfulData: true,
+  });
 
   if (legacyResult.type === "unsupported" || legacyResult.type === "missing_order_id") {
-    return legacyResult;
+    return {
+      ...legacyResult,
+      trace,
+    };
   }
 
   return {
@@ -123,6 +147,7 @@ async function resolveLegacyQuery(question: string): Promise<RunOpsQueryResult> 
     prompt: legacyResult.prompt,
     fallbackAnswer: legacyResult.fallbackAnswer,
     sources: legacyResult.sources,
+    trace,
   };
 }
 
@@ -130,32 +155,66 @@ export async function runOpsQuery(
   question: string,
   options: RunOpsQueryOptions = {}
 ): Promise<RunOpsQueryResult> {
+  const queryId = crypto.randomUUID();
+  const totalStartMs = performance.now();
+  const planningStartMs = performance.now();
   const plan = buildOpsPlan(question);
+  const planningMs = Math.round(performance.now() - planningStartMs);
 
   if (plan.intent === "unsupported") {
-    return resolveLegacyQuery(question);
+    return resolveLegacyQuery(question, queryId, totalStartMs);
   }
 
   if (isMissingOrderIdPlan(plan)) {
+    const totalMs = Math.round(performance.now() - totalStartMs);
     return {
       type: "missing_order_id",
       answer:
         "Please include the order id. This first version supports order history and order detail queries by order id.",
       sources: [],
+      trace: buildOpsQueryTrace({
+        queryId,
+        question,
+        resultType: "missing_order_id",
+        plan,
+        totalMs,
+        timings: {
+          planningMs,
+          executionMs: 0,
+          packingMs: 0,
+          analyticsMs: 0,
+        },
+        noMeaningfulData: true,
+      }),
     };
   }
 
   if (isMissingHistoryIdPlan(plan)) {
+    const totalMs = Math.round(performance.now() - totalStartMs);
     return {
       type: "missing_history_id",
       answer:
         "Please include the reconciliation history id. This first version supports reconciliation checks by history id.",
       sources: [],
+      trace: buildOpsQueryTrace({
+        queryId,
+        question,
+        resultType: "missing_history_id",
+        plan,
+        totalMs,
+        timings: {
+          planningMs,
+          executionMs: 0,
+          packingMs: 0,
+          analyticsMs: 0,
+        },
+        noMeaningfulData: true,
+      }),
     };
   }
 
   if (!supportsOrchestratedOpsPlan(plan)) {
-    return resolveLegacyQuery(question);
+    return resolveLegacyQuery(question, queryId, totalStartMs);
   }
 
   console.info("Ops query selected plan", {
@@ -164,9 +223,15 @@ export async function runOpsQuery(
     tools: plan.tools.map((tool) => tool.toolName),
   });
 
+  const executionStartMs = performance.now();
   const execution = await executePlan(plan, options.executePlanOptions);
+  const executionMs = Math.round(performance.now() - executionStartMs);
+  const packingStartMs = performance.now();
   const packedContext = packExecutionContext(plan, execution) as PackedOpsContext<PackedOrderData>;
+  const packingMs = Math.round(performance.now() - packingStartMs);
+  const analyticsStartMs = performance.now();
   const analytics = analyzeOpsContext(packedContext);
+  const analyticsMs = Math.round(performance.now() - analyticsStartMs);
   const hasMeaningfulData = hasMeaningfulPackedOpsData(packedContext);
   const successCount = execution.results.filter((result) => result.status === "success").length;
   const partialSuccessCount = execution.results.filter(
@@ -183,17 +248,40 @@ export async function runOpsQuery(
     errorCount,
   });
 
+  const prompt = buildOpsPrompt(question, packedContext, analytics);
+  const fallbackAnswer = hasMeaningfulData
+    ? buildOpsFallbackAnswer(packedContext, analytics)
+    : "I couldn't retrieve Bamboo operations data right now. Please try again in a moment.";
+  const totalMs = Math.round(performance.now() - totalStartMs);
+  const trace = buildOpsQueryTrace({
+    queryId,
+    question,
+    resultType: "resolved",
+    plan,
+    execution,
+    packedContext,
+    analytics,
+    totalMs,
+    timings: {
+      planningMs,
+      executionMs,
+      packingMs,
+      analyticsMs,
+    },
+    usedFallback: !hasMeaningfulData,
+    noMeaningfulData: !hasMeaningfulData,
+  });
+
   return {
     type: "resolved",
-    prompt: buildOpsPrompt(question, packedContext, analytics),
-    fallbackAnswer: hasMeaningfulData
-      ? buildOpsFallbackAnswer(packedContext, analytics)
-      : "I couldn't retrieve Bamboo operations data right now. Please try again in a moment.",
+    prompt,
+    fallbackAnswer,
     useFallbackOnly: !hasMeaningfulData,
     sources: packedContext.sources,
     plan,
     execution,
     packedContext,
     analytics,
+    trace,
   };
 }
