@@ -15,6 +15,8 @@ export const OPS_TOOL_NAMES = {
   getInvalidProductBrandCards: "getInvalidProductBrandCards",
   getExpiredCards: "getExpiredCards",
   getSystemCardsSummaryReconcileSupplier: "getSystemCardsSummaryReconcileSupplier",
+  getCloudWatchLogs: "getCloudWatchLogs",
+  getServiceErrorSummary: "getServiceErrorSummary",
 } as const;
 
 type ToolParameterName<TParams extends object> = Extract<keyof TParams, string>;

@@ -42,6 +42,7 @@ export function buildOpsPrompt(
       "In Examples, include at most 2 or 3 example ids.",
       "In Next checks, use flat bullet points and only include checks that are justified by the data.",
       "If some data could not be fetched, mention that briefly in Details.",
+      "If AWS or CloudWatch data is present, explain recent system-side issues in simple words.",
       "Do not use technical jargon.",
       "Do not mention tools, plans, or execution internals.",
       "Do not invent causes, totals, statuses, or entities that are not shown.",

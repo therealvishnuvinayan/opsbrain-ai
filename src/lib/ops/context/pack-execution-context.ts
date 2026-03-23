@@ -74,6 +74,10 @@ function getSourceLabel(toolName: string) {
       return "Expired cards";
     case OPS_TOOL_NAMES.getSystemCardsSummaryReconcileSupplier:
       return "Reconciliation supplier summary";
+    case OPS_TOOL_NAMES.getCloudWatchLogs:
+      return "CloudWatch logs";
+    case OPS_TOOL_NAMES.getServiceErrorSummary:
+      return "Service error summary";
     default:
       return undefined;
   }
@@ -196,6 +200,13 @@ function packOrderData(results: ToolExecutionResult[]): PackedOrderData {
       case OPS_TOOL_NAMES.getSystemCardsSummaryReconcileSupplier:
         data.reconciliationSummary = result.data;
         break;
+      case OPS_TOOL_NAMES.getCloudWatchLogs:
+        data.awsLogs = result.data;
+        break;
+      case OPS_TOOL_NAMES.getServiceErrorSummary:
+        data.serviceHealth = result.data;
+        data.infraSummary ??= result.data;
+        break;
       default:
         break;
     }
@@ -246,6 +257,32 @@ function buildOrderNotes(
     (summary.partialSuccessTools?.length ?? 0) > 0 ||
     (summary.skippedTools?.length ?? 0) > 0;
   const reconciliationStatusResult = getToolResult(results, OPS_TOOL_NAMES.getReconciliationStatus);
+  const cloudWatchLogsResult = getToolResult(results, OPS_TOOL_NAMES.getCloudWatchLogs);
+  const serviceHealthResult = getToolResult(results, OPS_TOOL_NAMES.getServiceErrorSummary);
+
+  if (
+    cloudWatchLogsResult?.error?.code === "permission_denied"
+  ) {
+    appendNote(notes, "CloudWatch logs could not be accessed due to permissions.");
+  } else if (
+    (summary.failedTools.includes(OPS_TOOL_NAMES.getCloudWatchLogs) ||
+      summary.partialSuccessTools?.includes(OPS_TOOL_NAMES.getCloudWatchLogs)) &&
+    data.awsLogs === undefined
+  ) {
+    appendNote(notes, "CloudWatch log data was unavailable.");
+  }
+
+  if (
+    serviceHealthResult?.error?.code === "permission_denied"
+  ) {
+    appendNote(notes, "Service health data could not be accessed due to permissions.");
+  } else if (
+    (summary.failedTools.includes(OPS_TOOL_NAMES.getServiceErrorSummary) ||
+      summary.partialSuccessTools?.includes(OPS_TOOL_NAMES.getServiceErrorSummary)) &&
+    data.serviceHealth === undefined
+  ) {
+    appendNote(notes, "Service health data was unavailable.");
+  }
 
   if (
     (summary.failedTools.includes(OPS_TOOL_NAMES.getAuditLogs) ||
@@ -358,7 +395,10 @@ function buildOrderNotes(
     data.reconciledRecords === undefined &&
     data.invalidProductBrandCards === undefined &&
     data.expiredCards === undefined &&
-    data.reconciliationSummary === undefined
+    data.reconciliationSummary === undefined &&
+    data.awsLogs === undefined &&
+    data.serviceHealth === undefined &&
+    data.infraSummary === undefined
   ) {
     appendNote(notes, "Only order history data was available.");
   }
@@ -372,9 +412,28 @@ function buildOrderNotes(
     data.reconciledRecords === undefined &&
     data.invalidProductBrandCards === undefined &&
     data.expiredCards === undefined &&
-    data.reconciliationSummary === undefined
+    data.reconciliationSummary === undefined &&
+    data.awsLogs === undefined &&
+    data.serviceHealth === undefined &&
+    data.infraSummary === undefined
   ) {
     appendNote(notes, "Only reconciliation status data was available.");
+  }
+
+  if (
+    data.history === undefined &&
+    data.order === undefined &&
+    data.billing === undefined &&
+    data.reconciliationStatus === undefined &&
+    data.bufferedRecords === undefined &&
+    data.reconciledRecords === undefined &&
+    data.invalidProductBrandCards === undefined &&
+    data.expiredCards === undefined &&
+    data.reconciliationSummary === undefined &&
+    data.awsLogs !== undefined &&
+    data.serviceHealth === undefined
+  ) {
+    appendNote(notes, "Only CloudWatch log data was available.");
   }
 
   if (
@@ -389,7 +448,10 @@ function buildOrderNotes(
     data.reconciledRecords === undefined &&
     data.invalidProductBrandCards === undefined &&
     data.expiredCards === undefined &&
-    data.reconciliationSummary === undefined
+    data.reconciliationSummary === undefined &&
+    data.awsLogs === undefined &&
+    data.serviceHealth === undefined &&
+    data.infraSummary === undefined
   ) {
     appendNote(notes, "No successful tool data was available.");
   }
@@ -422,7 +484,7 @@ export function packExecutionContext(
   const summary = buildExecutionSummary(execution.results);
   const sources = collectPackedSources(execution.results);
 
-  if (plan.domain === "orders" || plan.domain === "reconciliation") {
+  if (plan.domain === "orders" || plan.domain === "reconciliation" || plan.domain === "aws") {
     const data = packOrderData(execution.results);
 
     return {

@@ -72,12 +72,13 @@ function isMissingHistoryIdPlan(plan: ExecutionPlan) {
 
 function supportsOrchestratedOpsPlan(plan: ExecutionPlan) {
   return (
-    (plan.domain === "orders" || plan.domain === "reconciliation") &&
+    (plan.domain === "orders" || plan.domain === "reconciliation" || plan.domain === "aws") &&
     (plan.intent === "order_history" ||
       plan.intent === "order_detail" ||
       plan.intent === "order_issue_investigation" ||
       plan.intent === "order_audit_activity" ||
-      plan.intent.startsWith("reconciliation_"))
+      plan.intent.startsWith("reconciliation_") ||
+      plan.intent.startsWith("aws_"))
   );
 }
 
@@ -94,7 +95,10 @@ function hasMeaningfulPackedOpsData(context: PackedOpsContext<PackedOrderData>) 
       context.data.reconciledRecords ||
       context.data.invalidProductBrandCards ||
       context.data.expiredCards ||
-      context.data.reconciliationSummary
+      context.data.reconciliationSummary ||
+      context.data.awsLogs ||
+      context.data.serviceHealth ||
+      context.data.infraSummary
   );
 }
 

@@ -27,6 +27,9 @@ export interface PackedOrderData {
   invalidProductBrandCards?: unknown;
   expiredCards?: unknown;
   reconciliationSummary?: unknown;
+  awsLogs?: unknown;
+  serviceHealth?: unknown;
+  infraSummary?: unknown;
 }
 
 export interface PackedOpsContext<TData = Record<string, unknown>> {

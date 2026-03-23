@@ -35,6 +35,26 @@ const INVALID_HISTORY_ID_TOKENS = new Set([
   "issues",
 ]);
 
+const INVALID_SERVICE_NAME_TOKENS = new Set([
+  "service",
+  "services",
+  "backend",
+  "system",
+  "errors",
+  "error",
+  "fail",
+  "failed",
+  "issue",
+  "issues",
+  "cloudwatch",
+  "logs",
+  "recent",
+  "last",
+  "check",
+  "show",
+  "any",
+]);
+
 function startOfDay(date: Date) {
   const next = new Date(date);
   next.setHours(0, 0, 0, 0);
@@ -130,6 +150,72 @@ function extractHistoryId(question: string) {
   }
 
   return undefined;
+}
+
+function normalizeCandidateServiceName(value?: string | null) {
+  if (!value) {
+    return undefined;
+  }
+
+  const normalized = value.trim().replace(/[.,!?]+$/, "");
+
+  if (!normalized) {
+    return undefined;
+  }
+
+  if (INVALID_SERVICE_NAME_TOKENS.has(normalized.toLowerCase())) {
+    return undefined;
+  }
+
+  return normalized;
+}
+
+function extractServiceName(question: string) {
+  const explicitPatterns = [
+    /\bfor\s+([a-z0-9-]{3,})\s+service\b/i,
+    /\b([a-z0-9-]{3,})\s+service\b/i,
+    /\bservice\s+([a-z0-9-]{3,})\b/i,
+  ];
+
+  for (const pattern of explicitPatterns) {
+    const match = question.match(pattern);
+    const candidate = normalizeCandidateServiceName(match?.[1]);
+
+    if (candidate) {
+      return candidate;
+    }
+  }
+
+  return undefined;
+}
+
+function extractAwsMinutes(question: string) {
+  const normalized = question.trim().toLowerCase();
+  const minuteMatch = normalized.match(/\blast\s+(\d{1,3})\s+minutes?\b/);
+
+  if (minuteMatch?.[1]) {
+    return Number.parseInt(minuteMatch[1], 10);
+  }
+
+  const hourMatch = normalized.match(/\blast\s+(\d{1,2})\s+hours?\b/);
+
+  if (hourMatch?.[1]) {
+    return Number.parseInt(hourMatch[1], 10) * 60;
+  }
+
+  if (normalized.includes("last hour")) {
+    return 60;
+  }
+
+  if (normalized.includes("last 30 min")) {
+    return 30;
+  }
+
+  if (normalized.includes("today")) {
+    return 24 * 60;
+  }
+
+  return 60;
 }
 
 function applyDateWindow(question: string, filters: OrderHistoryFilters = {}) {
@@ -603,6 +689,104 @@ function buildReconciliationPlan(
   };
 }
 
+function buildAwsPlan(
+  question: string,
+  options?: {
+    orderId?: string;
+    historyId?: string;
+  }
+): ExecutionPlan {
+  const normalized = question.trim().toLowerCase();
+  const serviceName = extractServiceName(question);
+  const minutes = extractAwsMinutes(question);
+  const asksForExplicitLogs = hasAnyKeyword(normalized, [
+    "cloudwatch",
+    "cloudwatch logs",
+    "logs",
+  ]);
+  const asksForServiceSummary = hasAnyKeyword(normalized, [
+    "errors",
+    "error",
+    "issue",
+    "issues",
+    "fail",
+    "failed",
+    "service health",
+    "system issue",
+    "system error",
+    "backend error",
+    "backend errors",
+  ]);
+  const orderId = options?.orderId;
+  const historyId = options?.historyId;
+  const tools: PlannedToolCall[] = [];
+
+  if (orderId) {
+    tools.push(
+      buildToolCall(
+        OPS_TOOL_NAMES.getOrderDetails,
+        "Fetch the order detail record so system findings can be compared with the order state.",
+        { orderId }
+      )
+    );
+  }
+
+  if (historyId) {
+    tools.push(
+      buildToolCall(
+        OPS_TOOL_NAMES.getReconciliationStatus,
+        "Fetch the reconciliation status so system findings can be compared with reconciliation activity.",
+        { historyId }
+      )
+    );
+  }
+
+  const awsParams = {
+    serviceName,
+    minutes,
+    limit: asksForExplicitLogs ? 25 : 15,
+    queryText:
+      normalized.includes("payment") && !serviceName
+        ? "payment"
+        : normalized.includes("reconcil")
+          ? "reconciliation"
+          : undefined,
+  };
+
+  tools.push(
+    buildToolCall(
+      OPS_TOOL_NAMES.getServiceErrorSummary,
+      "Fetch a recent CloudWatch-based service error summary for the requested time window.",
+      awsParams
+    )
+  );
+
+  if (asksForExplicitLogs || normalized.includes("cloudwatch")) {
+    tools.push(
+      buildToolCall(
+        OPS_TOOL_NAMES.getCloudWatchLogs,
+        "Fetch recent CloudWatch log entries to inspect the latest infrastructure-side signals.",
+        awsParams
+      )
+    );
+  }
+
+  return {
+    intent: asksForExplicitLogs ? "aws_logs" : "aws_service_errors",
+    domain: orderId ? "orders" : historyId ? "reconciliation" : "aws",
+    entities: {
+      orderId: orderId ?? null,
+      historyId: historyId ?? null,
+      serviceName: serviceName ?? null,
+      minutes,
+      includeAws: true,
+    },
+    tools,
+    confidence: 0.9,
+    notes: ["Deterministic AWS / CloudWatch plan based on system-health keywords."],
+  };
+}
+
 export function buildOrderPlan(question: string): ExecutionPlan {
   const normalized = question.trim().toLowerCase();
   const hasOrderCue = normalized.includes("order") || /\bO-\d{3,}\b/i.test(question);
@@ -611,6 +795,7 @@ export function buildOrderPlan(question: string): ExecutionPlan {
     normalized.includes("history") || normalized.includes("reconciliation")
       ? extractHistoryId(question)
       : undefined;
+  const serviceName = extractServiceName(question);
   const useClientHistory = normalized.includes("client order");
   const asksForHistory = hasAnyKeyword(normalized, [
     "recent order",
@@ -663,6 +848,25 @@ export function buildOrderPlan(question: string): ExecutionPlan {
     "expired cards",
     "expired card",
   ]);
+  const asksForAws = hasAnyKeyword(normalized, [
+    "cloudwatch",
+    "backend error",
+    "backend errors",
+    "system issue",
+    "system issues",
+    "system error",
+    "system errors",
+    "service health",
+    "service fail",
+    "service failed",
+  ]) || ((normalized.includes("error") || normalized.includes("errors") || normalized.includes("issue")) && Boolean(serviceName));
+
+  if (asksForAws) {
+    return buildAwsPlan(question, {
+      orderId,
+      historyId,
+    });
+  }
 
   if (asksForReconciliation) {
     return buildReconciliationPlan(question, historyId, {

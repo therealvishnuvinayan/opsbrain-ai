@@ -63,6 +63,16 @@ export interface ReconciliationSummary {
   hasExpiredCards: boolean;
 }
 
+export interface AwsSummary {
+  serviceName?: string;
+  logGroupCount: number;
+  errorCount: number;
+  hasRecentErrors: boolean;
+  noLogGroups: boolean;
+  latestErrorService?: string;
+  latestErrorAt?: string;
+}
+
 export interface OpsAnalytics {
   domain: OpsDomain;
   intent: string;
@@ -76,6 +86,7 @@ export interface OpsAnalytics {
   detailSummary?: OrderDetailSummary;
   auditSummary?: AuditSummary;
   reconciliationSummary?: ReconciliationSummary;
+  awsSummary?: AwsSummary;
 }
 
 export type OrderAnalytics = OpsAnalytics;

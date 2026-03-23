@@ -8,6 +8,15 @@ import {
   type NormalizedAuditLogs,
 } from "@/lib/bamboo/audit";
 import {
+  getCloudWatchLogs,
+  type CloudWatchLogFilters,
+  type NormalizedCloudWatchLogs,
+} from "@/lib/aws/cloudwatch";
+import {
+  getServiceErrorSummary,
+  type NormalizedServiceErrorSummary,
+} from "@/lib/aws/service-health";
+import {
   getClientOrderHistory,
   getOrderDetails,
   getOrderHistory,
@@ -95,6 +104,16 @@ type ReconciliationRecordsResult = {
 type ReconciliationSupplierSummaryResult = {
   context: NormalizedReconciliationSupplierSummary;
   sources: Array<{ type: "swagger"; endpoint: string }>;
+};
+
+type CloudWatchLogsResult = {
+  context: NormalizedCloudWatchLogs;
+  sources: Array<{ type: "aws"; endpoint: string }>;
+};
+
+type ServiceErrorSummaryResult = {
+  context: NormalizedServiceErrorSummary;
+  sources: Array<{ type: "aws"; endpoint: string }>;
 };
 
 function pickSources(
@@ -295,6 +314,29 @@ const getSystemCardsSummaryReconcileSupplierTool: ToolDefinition<
   execute: async ({ historyId }) => getSystemCardsSummaryReconcileSupplier(historyId),
 };
 
+const getCloudWatchLogsTool: ToolDefinition<CloudWatchLogFilters, CloudWatchLogsResult> = {
+  name: OPS_TOOL_NAMES.getCloudWatchLogs,
+  domain: "aws",
+  description: "Fetch recent CloudWatch log entries with optional service and time filters.",
+  requiredParams: [],
+  optionalParams: ["serviceName", "queryText", "minutes", "startTime", "endTime", "limit", "logGroupPrefix"],
+  sourceType: "aws",
+  execute: getCloudWatchLogs,
+};
+
+const getServiceErrorSummaryTool: ToolDefinition<
+  CloudWatchLogFilters,
+  ServiceErrorSummaryResult
+> = {
+  name: OPS_TOOL_NAMES.getServiceErrorSummary,
+  domain: "aws",
+  description: "Fetch a compact service error summary from recent CloudWatch logs.",
+  requiredParams: [],
+  optionalParams: ["serviceName", "queryText", "minutes", "startTime", "endTime", "limit", "logGroupPrefix"],
+  sourceType: "aws",
+  execute: getServiceErrorSummary,
+};
+
 export const opsToolRegistry = [
   getOrderHistoryTool,
   getClientOrderHistoryTool,
@@ -310,6 +352,8 @@ export const opsToolRegistry = [
   getInvalidProductBrandCardsTool,
   getExpiredCardsTool,
   getSystemCardsSummaryReconcileSupplierTool,
+  getCloudWatchLogsTool,
+  getServiceErrorSummaryTool,
 ] satisfies readonly RegisteredToolDefinition[];
 
 const toolRegistryByName = new Map<string, RegisteredToolDefinition>(

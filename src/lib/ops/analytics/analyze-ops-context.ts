@@ -1,6 +1,10 @@
 import { analyzeOrderContext } from "@/lib/ops/analytics/analyze-order-context";
 import type { OpsAnalytics } from "@/lib/ops/analytics/analytics-types";
 import {
+  analyzeAwsContext,
+  hasAwsPackedData,
+} from "@/lib/ops/analytics/aws-analytics";
+import {
   analyzeReconciliationContext,
   hasReconciliationPackedData,
 } from "@/lib/ops/analytics/reconciliation-analytics";
@@ -40,17 +44,22 @@ function mergeAnalytics(base: OpsAnalytics, next: OpsAnalytics): OpsAnalytics {
     ...base,
     domain: base.domain,
     summary:
-      next.reconciliationSummary &&
-      (next.reconciliationSummary.appearsIncomplete ||
-        next.reconciliationSummary.hasInvalidProductBrandCards ||
-        next.reconciliationSummary.hasExpiredCards)
-        ? `${base.summary} I also found related reconciliation issues.`
-        : `${base.summary} I also checked related reconciliation data.`,
+      next.awsSummary && next.awsSummary.hasRecentErrors
+        ? `${base.summary} I also found recent system errors.`
+        : next.reconciliationSummary &&
+            (next.reconciliationSummary.appearsIncomplete ||
+              next.reconciliationSummary.hasInvalidProductBrandCards ||
+              next.reconciliationSummary.hasExpiredCards)
+          ? `${base.summary} I also found related reconciliation issues.`
+          : next.awsSummary && next.awsSummary.noLogGroups
+            ? `${base.summary} I also checked AWS logs, but no log groups were available.`
+            : `${base.summary} I also checked related operational data.`,
     patterns,
     nextChecks,
     examples,
     notes,
     reconciliationSummary: next.reconciliationSummary,
+    awsSummary: next.awsSummary,
   };
 }
 
@@ -66,19 +75,35 @@ export function analyzeOpsContext(
       context.data.audit
   );
   const hasReconciliationData = hasReconciliationPackedData(context.data);
+  const hasAwsData = hasAwsPackedData(context.data);
 
   if (hasOrderOrAuditData) {
     const orderAnalytics = analyzeOrderContext(context);
+    let mergedAnalytics = orderAnalytics;
 
-    if (!hasReconciliationData) {
-      return orderAnalytics;
+    if (hasReconciliationData) {
+      mergedAnalytics = mergeAnalytics(mergedAnalytics, analyzeReconciliationContext(context));
     }
 
-    return mergeAnalytics(orderAnalytics, analyzeReconciliationContext(context));
+    if (hasAwsData) {
+      mergedAnalytics = mergeAnalytics(mergedAnalytics, analyzeAwsContext(context));
+    }
+
+    return mergedAnalytics;
   }
 
   if (hasReconciliationData) {
-    return analyzeReconciliationContext(context);
+    const reconciliationAnalytics = analyzeReconciliationContext(context);
+
+    if (!hasAwsData) {
+      return reconciliationAnalytics;
+    }
+
+    return mergeAnalytics(reconciliationAnalytics, analyzeAwsContext(context));
+  }
+
+  if (hasAwsData) {
+    return analyzeAwsContext(context);
   }
 
   return {
