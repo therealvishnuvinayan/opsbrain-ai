@@ -407,6 +407,8 @@ export function buildPackedOrderPrompt(
       "Start with what is happening in plain language.",
       "Then explain the main issue or pattern in simple words.",
       "Mention up to 2 or 3 example order ids when useful.",
+      "If audit activity is present, explain what it suggests in simple words.",
+      "If audit activity is missing, say that briefly when it matters.",
       "If some requested data was unavailable, mention that briefly only when relevant.",
       "Format the answer with a blank line between sections.",
       "Write the final 'You should check:' section as bullet points, with one bullet on each line.",

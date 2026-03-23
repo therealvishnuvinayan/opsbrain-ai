@@ -54,6 +54,10 @@ function getSourceLabel(toolName: string) {
       return "Cards";
     case OPS_TOOL_NAMES.getOrderItemsInfo:
       return "Items";
+    case OPS_TOOL_NAMES.getAuditLogs:
+      return "Audit logs";
+    case OPS_TOOL_NAMES.getAuditLogById:
+      return "Audit event";
     default:
       return undefined;
   }
@@ -154,6 +158,10 @@ function packOrderData(results: ToolExecutionResult[]): PackedOrderData {
       case OPS_TOOL_NAMES.getOrderItemsInfo:
         data.items = result.data;
         break;
+      case OPS_TOOL_NAMES.getAuditLogs:
+      case OPS_TOOL_NAMES.getAuditLogById:
+        data.audit = result.data;
+        break;
       default:
         break;
     }
@@ -195,6 +203,13 @@ function buildOrderNotes(
 ) {
   const notes = [...(plan.notes ?? [])];
   const hasFailures = summary.failedTools.length > 0 || (summary.skippedTools?.length ?? 0) > 0;
+
+  if (
+    summary.failedTools.includes(OPS_TOOL_NAMES.getAuditLogs) &&
+    data.audit === undefined
+  ) {
+    appendNote(notes, "Audit log data was unavailable.");
+  }
 
   if (
     summary.failedTools.includes(OPS_TOOL_NAMES.getBillingOrder) &&
@@ -241,7 +256,8 @@ function buildOrderNotes(
     data.order === undefined &&
     data.billing === undefined &&
     data.cards === undefined &&
-    data.items === undefined
+    data.items === undefined &&
+    data.audit === undefined
   ) {
     appendNote(notes, "No successful tool data was available.");
   }

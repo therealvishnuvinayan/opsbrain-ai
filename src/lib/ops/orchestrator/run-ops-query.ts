@@ -53,7 +53,11 @@ interface RunOpsQueryOptions {
 function isMissingOrderIdPlan(plan: ExecutionPlan) {
   return (
     plan.tools.length === 0 &&
-    (plan.intent === "order_detail" || plan.intent === "order_issue_investigation")
+    (
+      plan.intent === "order_detail" ||
+      plan.intent === "order_issue_investigation" ||
+      plan.intent === "order_audit_activity"
+    )
   );
 }
 
@@ -62,7 +66,8 @@ function supportsOrchestratedOrdersPlan(plan: ExecutionPlan) {
     plan.domain === "orders" &&
     (plan.intent === "order_history" ||
       plan.intent === "order_detail" ||
-      plan.intent === "order_issue_investigation")
+      plan.intent === "order_issue_investigation" ||
+      plan.intent === "order_audit_activity")
   );
 }
 
@@ -72,7 +77,8 @@ function hasMeaningfulPackedOrderData(context: PackedOpsContext<PackedOrderData>
       context.data.order ||
       context.data.billing ||
       context.data.cards ||
-      context.data.items
+      context.data.items ||
+      context.data.audit
   );
 }
 

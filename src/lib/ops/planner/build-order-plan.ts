@@ -51,6 +51,8 @@ function extractOrderId(question: string) {
     /\bstatus\s+of\s+order\s+([a-z0-9-]{3,})\b/i,
     /\bshow\s+order\s+([a-z0-9-]{3,})\b/i,
     /\bcards\s+for\s+order\s+([a-z0-9-]{3,})\b/i,
+    /\b(?:for|with)\s+order\s+([a-z0-9-]{3,})\b/i,
+    /\border\s+([a-z0-9-]{3,})\b/i,
     /\bfor\s+order\s+([a-z0-9-]{3,})\b/i,
   ];
 
@@ -276,6 +278,72 @@ function buildIssueInvestigationPlan(question: string, orderId?: string): Execut
   };
 }
 
+function buildAuditActivityPlan(question: string, orderId?: string): ExecutionPlan {
+  const normalized = question.trim().toLowerCase();
+
+  if (!orderId) {
+    return {
+      intent: "order_audit_activity",
+      domain: "orders",
+      entities: {},
+      tools: [],
+      confidence: 0.3,
+      notes: ["Audit activity query matched, but no order id could be extracted."],
+    };
+  }
+
+  const tools: PlannedToolCall[] = [
+    buildToolCall(
+      OPS_TOOL_NAMES.getOrderDetails,
+      "Fetch the order detail record so audit activity can be interpreted against the order state.",
+      { orderId }
+    ),
+    buildToolCall(
+      OPS_TOOL_NAMES.getAuditLogs,
+      "Fetch audit activity related to the requested order id.",
+      {
+        OrderId: orderId,
+        EntityId: orderId,
+        EntityType: "order",
+        SearchText: orderId,
+        PageSize: 20,
+        PageIndex: 0,
+      }
+    ),
+  ];
+
+  if (
+    normalized.includes("payment") ||
+    normalized.includes("billing") ||
+    normalized.includes("fail") ||
+    normalized.includes("happened")
+  ) {
+    tools.splice(
+      1,
+      0,
+      buildToolCall(
+        OPS_TOOL_NAMES.getBillingOrder,
+        "Fetch billing data to compare payment state with order and audit activity.",
+        { orderId }
+      )
+    );
+  }
+
+  return {
+    intent: "order_audit_activity",
+    domain: "orders",
+    entities: {
+      orderId,
+      includeAudit: true,
+      mentionsPayment: normalized.includes("payment") || normalized.includes("billing"),
+      mentionsFailure: normalized.includes("fail") || normalized.includes("error"),
+    },
+    tools,
+    confidence: 0.93,
+    notes: ["Deterministic audit activity plan for a single order id."],
+  };
+}
+
 export function buildOrderPlan(question: string): ExecutionPlan {
   const normalized = question.trim().toLowerCase();
   const orderId = normalized.includes("order") ? extractOrderId(question) : extractOrderId(question);
@@ -309,6 +377,22 @@ export function buildOrderPlan(question: string): ExecutionPlan {
       "issue",
       "problem",
     ]);
+  const asksForAuditActivity =
+    Boolean(orderId) &&
+    hasAnyKeyword(normalized, [
+      "audit",
+      "audit log",
+      "audit logs",
+      "activity",
+      "what happened",
+      "happened",
+      "log",
+      "logs",
+    ]);
+
+  if (asksForAuditActivity) {
+    return buildAuditActivityPlan(question, orderId);
+  }
 
   if (asksForIssueInvestigation) {
     return buildIssueInvestigationPlan(question, orderId);

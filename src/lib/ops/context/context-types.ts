@@ -19,6 +19,7 @@ export interface PackedOrderData {
   billing?: unknown;
   cards?: unknown;
   items?: unknown;
+  audit?: unknown;
 }
 
 export interface PackedOpsContext<TData = Record<string, unknown>> {

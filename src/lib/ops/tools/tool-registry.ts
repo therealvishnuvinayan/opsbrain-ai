@@ -1,6 +1,13 @@
 import "server-only";
 
 import {
+  getAuditLogById,
+  getAuditLogs,
+  type AuditLogFilters,
+  type NormalizedAuditLogEntry,
+  type NormalizedAuditLogs,
+} from "@/lib/bamboo/audit";
+import {
   getClientOrderHistory,
   getOrderDetails,
   getOrderHistory,
@@ -48,6 +55,16 @@ type OrderCardsResult = {
 type BillingOrderResult = {
   context: Pick<NormalizedOrderDetail, "checkedAt" | "orderId" | "billingSummary" | "notableIssues">;
   sources: OrderDetailResult["sources"];
+};
+
+type AuditLogByIdParams = {
+  id: string;
+};
+
+type AuditLogsResult = Awaited<ReturnType<typeof getAuditLogs>>;
+type AuditLogByIdResult = {
+  context: NormalizedAuditLogEntry | undefined;
+  sources: Array<{ type: "swagger"; endpoint: string }>;
 };
 
 function pickSources(
@@ -155,6 +172,36 @@ const getBillingOrderTool: ToolDefinition<OrderIdParams, BillingOrderResult> = {
   },
 };
 
+const getAuditLogsTool: ToolDefinition<AuditLogFilters, AuditLogsResult> = {
+  name: OPS_TOOL_NAMES.getAuditLogs,
+  domain: "audit",
+  description: "Fetch Bamboo audit logs with optional filters, including order-related activity.",
+  requiredParams: [],
+  optionalParams: [
+    "PageSize",
+    "PageIndex",
+    "OrderId",
+    "EntityId",
+    "EntityType",
+    "SearchText",
+    "DateFrom",
+    "DateTo",
+    "EventType",
+    "Severity",
+  ],
+  sourceType: "swagger",
+  execute: getAuditLogs,
+};
+
+const getAuditLogByIdTool: ToolDefinition<AuditLogByIdParams, AuditLogByIdResult> = {
+  name: OPS_TOOL_NAMES.getAuditLogById,
+  domain: "audit",
+  description: "Fetch a single Bamboo audit log event by id.",
+  requiredParams: ["id"],
+  sourceType: "swagger",
+  execute: async ({ id }) => getAuditLogById(id),
+};
+
 export const opsToolRegistry = [
   getOrderHistoryTool,
   getClientOrderHistoryTool,
@@ -162,6 +209,8 @@ export const opsToolRegistry = [
   getOrderItemsInfoTool,
   getOrderCardsTool,
   getBillingOrderTool,
+  getAuditLogsTool,
+  getAuditLogByIdTool,
 ] satisfies readonly RegisteredToolDefinition[];
 
 const toolRegistryByName = new Map<string, RegisteredToolDefinition>(

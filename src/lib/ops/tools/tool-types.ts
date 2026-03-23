@@ -7,6 +7,8 @@ export const OPS_TOOL_NAMES = {
   getOrderItemsInfo: "getOrderItemsInfo",
   getOrderCards: "getOrderCards",
   getBillingOrder: "getBillingOrder",
+  getAuditLogs: "getAuditLogs",
+  getAuditLogById: "getAuditLogById",
 } as const;
 
 type ToolParameterName<TParams extends object> = Extract<keyof TParams, string>;

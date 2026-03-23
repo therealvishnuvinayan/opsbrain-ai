@@ -38,6 +38,16 @@ export interface OrderTrendSummary {
   previousLabel?: string;
 }
 
+export interface AuditSummary {
+  totalEvents: number;
+  latestEventType?: string;
+  latestEventAt?: string;
+  latestMessage?: string;
+  errorEvents: number;
+  repeatedErrorEvents: boolean;
+  noEvents: boolean;
+}
+
 export interface OrderAnalytics {
   domain: "orders";
   intent: string;
@@ -49,4 +59,5 @@ export interface OrderAnalytics {
   notes: string[];
   statusSummary?: OrderStatusSummary;
   detailSummary?: OrderDetailSummary;
+  auditSummary?: AuditSummary;
 }
