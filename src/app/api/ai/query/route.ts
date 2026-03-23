@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { getApiSession } from "@/lib/api-session";
-import { generateCompletion, resolveAiQuery } from "@/lib/ai/query";
+import { generateCompletion } from "@/lib/ai/query";
+import { runOpsQuery } from "@/lib/ops/orchestrator/run-ops-query";
 
 interface QueryRequestBody {
   question?: string;
@@ -27,11 +28,18 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await resolveAiQuery(question);
+    const result = await runOpsQuery(question);
 
     if (result.type === "missing_order_id" || result.type === "unsupported") {
       return NextResponse.json({
         answer: result.answer,
+        sources: result.sources,
+      });
+    }
+
+    if (result.useFallbackOnly) {
+      return NextResponse.json({
+        answer: result.fallbackAnswer,
         sources: result.sources,
       });
     }

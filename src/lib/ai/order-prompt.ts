@@ -6,9 +6,14 @@ import type {
   OrderPatternAnalysis,
   OrderTrendAnalysis,
 } from "@/lib/bamboo/orders";
+import type { PackedOpsContext, PackedOrderData } from "@/lib/ops/context/context-types";
 
 function joinExamples(values: string[], max = 3) {
   return values.slice(0, max).join(", ");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function buildHistoryNextStep(context: NormalizedOrderHistory) {
@@ -355,4 +360,99 @@ export function buildOrderDetailFallbackAnswer(context: NormalizedOrderDetail) {
   ]
     .filter(Boolean)
     .join("\n\n");
+}
+
+function isNormalizedOrderHistory(value: unknown): value is NormalizedOrderHistory {
+  return isRecord(value) && Array.isArray(value.orders) && typeof value.returnedCount === "number";
+}
+
+function isNormalizedOrderDetail(value: unknown): value is NormalizedOrderDetail {
+  return (
+    isRecord(value) &&
+    typeof value.orderId === "string" &&
+    typeof value.status === "string" &&
+    Array.isArray(value.items) &&
+    Array.isArray(value.cards)
+  );
+}
+
+function buildPackedOrderAvailabilityNote(context: PackedOpsContext<PackedOrderData>) {
+  const availabilityNotes = context.notes.filter(
+    (note) =>
+      note.includes("unavailable") ||
+      note.includes("could not be retrieved") ||
+      note.includes("failed")
+  );
+
+  if (availabilityNotes.length === 0) {
+    return "";
+  }
+
+  return `Availability note: ${availabilityNotes.join(" ")}`;
+}
+
+export function buildPackedOrderPrompt(
+  question: string,
+  context: PackedOpsContext<PackedOrderData>
+) {
+  return {
+    system: [
+      "You are Bamboo AI, a helpful teammate for operations users.",
+      "Answer only from the packed order context you are given.",
+      "Use simple English and keep the answer short and clear.",
+      "Be direct and confident.",
+      "Start with what is happening in plain language.",
+      "Then explain the main issue or pattern in simple words.",
+      "Mention up to 2 or 3 example order ids when useful.",
+      "If some requested data was unavailable, mention that briefly only when relevant.",
+      "Format the answer with a blank line between sections.",
+      "Write the final 'You should check:' section as bullet points, with one bullet on each line.",
+      "Do not use technical jargon.",
+      "Do not invent causes, totals, or statuses that are not shown in the packed context.",
+      "Do not mention tools, plans, or execution internals unless data availability matters.",
+    ].join(" "),
+    user: [
+      `User question: ${question}`,
+      "Packed order context:",
+      JSON.stringify(context, null, 2),
+      "Write a short answer in this order:",
+      "1. what is happening",
+      "2. the main issue or pattern",
+      "3. example orders if useful",
+      "4. what to check next",
+      "Use the packed context as the source of truth.",
+    ].join("\n\n"),
+  };
+}
+
+export function buildPackedOrderFallbackAnswer(context: PackedOpsContext<PackedOrderData>) {
+  const availabilityNote = buildPackedOrderAvailabilityNote(context);
+
+  if (isNormalizedOrderDetail(context.data.order)) {
+    return [buildOrderDetailFallbackAnswer(context.data.order), availabilityNote]
+      .filter(Boolean)
+      .join("\n\n");
+  }
+
+  if (isNormalizedOrderHistory(context.data.history)) {
+    const historyAnswer =
+      context.entities.status === "failed"
+        ? buildFailedOrdersFallbackAnswer(context.data.history)
+        : buildOrderHistoryFallbackAnswer(context.data.history);
+
+    return [historyAnswer, availabilityNote]
+      .filter(Boolean)
+      .join("\n\n");
+  }
+
+  if (context.notes.length > 0) {
+    return [
+      "I could not retrieve complete Bamboo order data right now.",
+      availabilityNote || context.notes.join(" "),
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  }
+
+  return "I couldn't retrieve Bamboo order data right now. Please try again in a moment.";
 }
