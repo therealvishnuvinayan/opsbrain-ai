@@ -11,7 +11,7 @@ import { packExecutionContext } from "@/lib/ops/context/pack-execution-context";
 import type { PackedOpsContext, PackedOrderData } from "@/lib/ops/context/context-types";
 import { executePlan, type ExecutePlanOptions } from "@/lib/ops/executor/execute-plan";
 import type { ExecutionRunResult } from "@/lib/ops/executor/execution-types";
-import { buildOrderPlan } from "@/lib/ops/planner/build-order-plan";
+import { buildOpsPlan } from "@/lib/ops/planner/build-ops-plan";
 import type { ExecutionPlan } from "@/lib/ops/planner/plan-types";
 
 type RunOpsQuerySource = {
@@ -130,7 +130,7 @@ export async function runOpsQuery(
   question: string,
   options: RunOpsQueryOptions = {}
 ): Promise<RunOpsQueryResult> {
-  const plan = buildOrderPlan(question);
+  const plan = buildOpsPlan(question);
 
   if (plan.intent === "unsupported") {
     return resolveLegacyQuery(question);
