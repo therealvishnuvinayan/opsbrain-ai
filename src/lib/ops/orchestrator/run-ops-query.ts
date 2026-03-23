@@ -5,6 +5,8 @@ import {
   buildPackedOrderPrompt,
 } from "@/lib/ai/order-prompt";
 import { resolveAiQuery } from "@/lib/ai/query";
+import { analyzeOrderContext } from "@/lib/ops/analytics/analyze-order-context";
+import type { OrderAnalytics } from "@/lib/ops/analytics/analytics-types";
 import { packExecutionContext } from "@/lib/ops/context/pack-execution-context";
 import type { PackedOpsContext, PackedOrderData } from "@/lib/ops/context/context-types";
 import { executePlan, type ExecutePlanOptions } from "@/lib/ops/executor/execute-plan";
@@ -41,6 +43,7 @@ export type RunOpsQueryResult =
       plan?: ExecutionPlan;
       execution?: ExecutionRunResult;
       packedContext?: PackedOpsContext<PackedOrderData>;
+      analytics?: OrderAnalytics;
     };
 
 interface RunOpsQueryOptions {
@@ -113,18 +116,20 @@ export async function runOpsQuery(
 
   const execution = await executePlan(plan, options.executePlanOptions);
   const packedContext = packExecutionContext(plan, execution) as PackedOpsContext<PackedOrderData>;
+  const analytics = analyzeOrderContext(packedContext);
   const hasMeaningfulData = hasMeaningfulPackedOrderData(packedContext);
 
   return {
     type: "resolved",
-    prompt: buildPackedOrderPrompt(question, packedContext),
+    prompt: buildPackedOrderPrompt(question, packedContext, analytics),
     fallbackAnswer: hasMeaningfulData
-      ? buildPackedOrderFallbackAnswer(packedContext)
+      ? buildPackedOrderFallbackAnswer(packedContext, analytics)
       : "I couldn't retrieve Bamboo order data right now. Please try again in a moment.",
     useFallbackOnly: !hasMeaningfulData,
     sources: packedContext.sources,
     plan,
     execution,
     packedContext,
+    analytics,
   };
 }

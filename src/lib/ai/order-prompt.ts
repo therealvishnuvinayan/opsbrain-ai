@@ -6,6 +6,7 @@ import type {
   OrderPatternAnalysis,
   OrderTrendAnalysis,
 } from "@/lib/bamboo/orders";
+import type { OrderAnalytics } from "@/lib/ops/analytics/analytics-types";
 import type { PackedOpsContext, PackedOrderData } from "@/lib/ops/context/context-types";
 
 function joinExamples(values: string[], max = 3) {
@@ -376,8 +377,8 @@ function isNormalizedOrderDetail(value: unknown): value is NormalizedOrderDetail
   );
 }
 
-function buildPackedOrderAvailabilityNote(context: PackedOpsContext<PackedOrderData>) {
-  const availabilityNotes = context.notes.filter(
+function buildPackedOrderAvailabilityNote(notes: string[]) {
+  const availabilityNotes = notes.filter(
     (note) =>
       note.includes("unavailable") ||
       note.includes("could not be retrieved") ||
@@ -393,14 +394,16 @@ function buildPackedOrderAvailabilityNote(context: PackedOpsContext<PackedOrderD
 
 export function buildPackedOrderPrompt(
   question: string,
-  context: PackedOpsContext<PackedOrderData>
+  context: PackedOpsContext<PackedOrderData>,
+  analytics: OrderAnalytics
 ) {
   return {
     system: [
       "You are Bamboo AI, a helpful teammate for operations users.",
-      "Answer only from the packed order context you are given.",
+      "Answer only from the packed order context and structured order analytics you are given.",
       "Use simple English and keep the answer short and clear.",
       "Be direct and confident.",
+      "Use the analytics as the primary interpretation layer and the packed context as supporting evidence.",
       "Start with what is happening in plain language.",
       "Then explain the main issue or pattern in simple words.",
       "Mention up to 2 or 3 example order ids when useful.",
@@ -413,6 +416,8 @@ export function buildPackedOrderPrompt(
     ].join(" "),
     user: [
       `User question: ${question}`,
+      "Structured order analytics:",
+      JSON.stringify(analytics, null, 2),
       "Packed order context:",
       JSON.stringify(context, null, 2),
       "Write a short answer in this order:",
@@ -420,29 +425,35 @@ export function buildPackedOrderPrompt(
       "2. the main issue or pattern",
       "3. example orders if useful",
       "4. what to check next",
-      "Use the packed context as the source of truth.",
+      "Use the structured analytics first and only use the packed context to support it.",
     ].join("\n\n"),
   };
 }
 
-export function buildPackedOrderFallbackAnswer(context: PackedOpsContext<PackedOrderData>) {
-  const availabilityNote = buildPackedOrderAvailabilityNote(context);
+export function buildPackedOrderFallbackAnswer(
+  context: PackedOpsContext<PackedOrderData>,
+  analytics: OrderAnalytics
+) {
+  const availabilityNote = buildPackedOrderAvailabilityNote(analytics.notes);
+  const examplesLine =
+    analytics.examples.length > 0
+      ? `Example orders: ${joinExamples(analytics.examples)}.`
+      : "";
+  const nextChecksLine =
+    analytics.nextChecks.length > 0 ? formatCheckList(analytics.nextChecks) : "";
 
-  if (isNormalizedOrderDetail(context.data.order)) {
-    return [buildOrderDetailFallbackAnswer(context.data.order), availabilityNote]
-      .filter(Boolean)
-      .join("\n\n");
-  }
+  const body = [
+    analytics.summary,
+    ...analytics.patterns.slice(0, 3),
+    examplesLine,
+    availabilityNote,
+    nextChecksLine,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 
-  if (isNormalizedOrderHistory(context.data.history)) {
-    const historyAnswer =
-      context.entities.status === "failed"
-        ? buildFailedOrdersFallbackAnswer(context.data.history)
-        : buildOrderHistoryFallbackAnswer(context.data.history);
-
-    return [historyAnswer, availabilityNote]
-      .filter(Boolean)
-      .join("\n\n");
+  if (body) {
+    return body;
   }
 
   if (context.notes.length > 0) {
