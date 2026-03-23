@@ -92,6 +92,10 @@ function buildTrustNotes(
     appendNote("This answer is based on limited available data.");
   }
 
+  if (trace.flags.noMeaningfulData) {
+    appendNote("I could not verify all related data.");
+  }
+
   for (const note of context?.notes ?? []) {
     const normalized = note.toLowerCase();
 
@@ -99,7 +103,8 @@ function buildTrustNotes(
       normalized.includes("unavailable") ||
       normalized.includes("could not") ||
       normalized.includes("permission") ||
-      normalized.includes("no log groups")
+      normalized.includes("no log groups") ||
+      normalized.includes("no successful tool data")
     ) {
       appendNote(note);
     }

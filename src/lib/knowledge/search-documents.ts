@@ -1,6 +1,7 @@
 import "server-only";
 
 import { indexDocuments } from "@/lib/knowledge/index-documents";
+import { buildCacheKey, getOrSetMemoryCache } from "@/lib/ops/runtime/memory-cache";
 import type {
   IndexedKnowledgeChunk,
   KnowledgeSearchFilters,
@@ -54,74 +55,78 @@ function matchesDomain(chunk: IndexedKnowledgeChunk, domain?: string) {
 }
 
 export async function searchKnowledgeDocs(filters: KnowledgeSearchFilters) {
-  const query = filters.query.trim();
-  const maxResults = filters.maxResults && filters.maxResults > 0 ? filters.maxResults : 5;
-  const queryTokens = tokenize(query);
-  const index = await indexDocuments();
-  const scoredChunks = index.chunks
-    .filter((chunk) => matchesDomain(chunk, filters.domain))
-    .map((chunk) => {
-      let score = 0;
+  const cacheKey = buildCacheKey(["knowledge-search", filters]);
 
-      for (const token of queryTokens) {
-        const termFrequency = chunk.tokenCounts.get(token) ?? 0;
+  return getOrSetMemoryCache(cacheKey, 60_000, async () => {
+    const query = filters.query.trim();
+    const maxResults = Math.min(filters.maxResults && filters.maxResults > 0 ? filters.maxResults : 5, 5);
+    const queryTokens = tokenize(query);
+    const index = await indexDocuments();
+    const scoredChunks = index.chunks
+      .filter((chunk) => matchesDomain(chunk, filters.domain))
+      .map((chunk) => {
+        let score = 0;
 
-        if (termFrequency === 0) {
-          continue;
+        for (const token of queryTokens) {
+          const termFrequency = chunk.tokenCounts.get(token) ?? 0;
+
+          if (termFrequency === 0) {
+            continue;
+          }
+
+          score += termFrequency * (index.inverseDocumentFrequency.get(token) ?? 1);
         }
 
-        score += termFrequency * (index.inverseDocumentFrequency.get(token) ?? 1);
-      }
+        score += addTagBoost(chunk, query);
+        score += addTitleBoost(chunk, query);
 
-      score += addTagBoost(chunk, query);
-      score += addTitleBoost(chunk, query);
+        if (filters.tags?.some((tag) => chunk.tags.includes(tag))) {
+          score += 1.5;
+        }
 
-      if (filters.tags?.some((tag) => chunk.tags.includes(tag))) {
-        score += 1.5;
-      }
+        if (chunk.domain && filters.domain && chunk.domain === filters.domain) {
+          score += 1;
+        }
 
-      if (chunk.domain && filters.domain && chunk.domain === filters.domain) {
-        score += 1;
-      }
+        return {
+          chunk,
+          score,
+        };
+      })
+      .filter((entry) => entry.score > 0)
+      .sort((left, right) => right.score - left.score)
+      .slice(0, maxResults);
+    const results: NormalizedKnowledgeSearchMatch[] = scoredChunks.map(({ chunk, score }) => ({
+      title: chunk.title,
+      source: chunk.source,
+      excerpt: chunk.excerpt,
+      relevanceScore: Number(score.toFixed(3)),
+      tags: chunk.tags,
+      domain: chunk.domain,
+      guidancePoints: chunk.guidancePoints.slice(0, 3),
+    }));
 
-      return {
-        chunk,
-        score,
-      };
-    })
-    .filter((entry) => entry.score > 0)
-    .sort((left, right) => right.score - left.score)
-    .slice(0, maxResults);
-  const results: NormalizedKnowledgeSearchMatch[] = scoredChunks.map(({ chunk, score }) => ({
-    title: chunk.title,
-    source: chunk.source,
-    excerpt: chunk.excerpt,
-    relevanceScore: Number(score.toFixed(3)),
-    tags: chunk.tags,
-    domain: chunk.domain,
-    guidancePoints: chunk.guidancePoints.slice(0, 3),
-  }));
-
-  return {
-    context: {
-      checkedAt: new Date().toISOString(),
-      query,
-      domain: filters.domain,
-      returnedCount: results.length,
-      bestScore: results[0]?.relevanceScore,
-      hasRunbookMatch: results.some(
-        (result) =>
-          result.title.toLowerCase().includes("runbook") ||
-          result.title.toLowerCase().includes("sop") ||
-          result.tags.some((tag) => tag.toLowerCase() === "runbook" || tag.toLowerCase() === "sop")
-      ),
-      results,
-    } satisfies NormalizedKnowledgeSearchResults,
-    sources: [
-      {
-        type: "rag" as const,
-        endpoint: "knowledge:local-index",
-      },
-    ],
-  };
+    return {
+      context: {
+        checkedAt: new Date().toISOString(),
+        query,
+        domain: filters.domain,
+        returnedCount: results.length,
+        bestScore: results[0]?.relevanceScore,
+        hasRunbookMatch: results.some(
+          (result) =>
+            result.title.toLowerCase().includes("runbook") ||
+            result.title.toLowerCase().includes("sop") ||
+            result.tags.some((tag) => tag.toLowerCase() === "runbook" || tag.toLowerCase() === "sop")
+        ),
+        results,
+      } satisfies NormalizedKnowledgeSearchResults,
+      sources: [
+        {
+          type: "rag" as const,
+          endpoint: "knowledge:local-index",
+        },
+      ],
+    };
+  });
 }

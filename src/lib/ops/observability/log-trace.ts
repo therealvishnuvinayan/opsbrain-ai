@@ -6,7 +6,7 @@ export function logOpsQueryTrace(trace: OpsQueryTrace) {
     resultType: trace.resultType,
     intent: trace.intent,
     selectedDomains: trace.selectedDomains,
-    matchedSignals: trace.matchedSignals,
+    matchedSignals: trace.matchedSignals.slice(0, 8),
     plannerConfidence: trace.plannerConfidence,
     toolCalls: trace.toolCalls.map((tool) => ({
       toolName: tool.toolName,
@@ -19,7 +19,7 @@ export function logOpsQueryTrace(trace: OpsQueryTrace) {
     timings: trace.timings,
     flags: trace.flags,
     sourcesCount: trace.sourcesCount,
-    notes: trace.notes.slice(0, 5),
+    notes: trace.notes.slice(0, 4),
     analyticsSummary: trace.analyticsSummary,
   });
 }

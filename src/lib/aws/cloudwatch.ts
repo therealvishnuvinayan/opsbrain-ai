@@ -5,6 +5,8 @@ import {
   DescribeLogGroupsCommand,
   FilterLogEventsCommand,
 } from "@aws-sdk/client-cloudwatch-logs";
+import { retryAsync, withTimeout } from "@/lib/ops/runtime/external-request";
+import { buildCacheKey, getOrSetMemoryCache } from "@/lib/ops/runtime/memory-cache";
 
 export interface CloudWatchLogFilters {
   serviceName?: string;
@@ -61,9 +63,23 @@ let cloudWatchLogsClient: CloudWatchLogsClient | undefined;
 function getCloudWatchLogsClient() {
   cloudWatchLogsClient ??= new CloudWatchLogsClient({
     region: getAwsRegion(),
+    maxAttempts: 2,
   });
 
   return cloudWatchLogsClient;
+}
+
+async function sendCloudWatchCommand<T>(command: { input: object }, factory: () => Promise<T>) {
+  return retryAsync({
+    attempts: 2,
+    retryDelayMs: 250,
+    factory: async () =>
+      withTimeout(
+        async () => factory(),
+        10_000,
+        `CloudWatch request timed out for ${command.constructor.name}.`
+      ),
+  });
 }
 
 function normalizeToken(value?: string) {
@@ -190,13 +206,12 @@ async function listRelevantLogGroups(filters: CloudWatchLogFilters) {
   let pageCount = 0;
 
   while (pageCount < 3) {
-    const response = await client.send(
-      new DescribeLogGroupsCommand({
-        nextToken,
-        limit: 50,
-        logGroupNamePrefix: filters.logGroupPrefix,
-      })
-    );
+    const command = new DescribeLogGroupsCommand({
+      nextToken,
+      limit: 50,
+      logGroupNamePrefix: filters.logGroupPrefix,
+    });
+    const response = await sendCloudWatchCommand(command, () => client.send(command));
 
     for (const logGroup of response.logGroups ?? []) {
       const name = logGroup.logGroupName?.trim();
@@ -253,104 +268,107 @@ function buildRepeatedMessages(entries: NormalizedCloudWatchLogEntry[]) {
 }
 
 export async function getCloudWatchLogs(filters: CloudWatchLogFilters = {}) {
-  const client = getCloudWatchLogsClient();
-  const timeRange = buildTimeRange(filters);
-  const logGroups = await listRelevantLogGroups(filters);
+  const cacheKey = buildCacheKey(["cloudwatch", filters]);
 
-  if (logGroups.length === 0) {
+  return getOrSetMemoryCache(cacheKey, 20_000, async () => {
+    const client = getCloudWatchLogsClient();
+    const timeRange = buildTimeRange(filters);
+    const logGroups = await listRelevantLogGroups(filters);
+
+    if (logGroups.length === 0) {
+      return {
+        context: {
+          checkedAt: new Date().toISOString(),
+          timeRange,
+          serviceName: filters.serviceName,
+          queryText: filters.queryText,
+          logGroupCount: 0,
+          returnedCount: 0,
+          repeatedMessages: [],
+          noLogGroups: true,
+          entries: [],
+        } satisfies NormalizedCloudWatchLogs,
+        sources: [
+          {
+            type: "aws" as const,
+            endpoint: "cloudwatch:DescribeLogGroups",
+          },
+        ],
+      };
+    }
+
+    const maxEntries = Math.min(filters.limit && filters.limit > 0 ? filters.limit : 25, 25);
+    const perGroupLimit = Math.max(5, Math.ceil(maxEntries / logGroups.length));
+    const collectedEntries: NormalizedCloudWatchLogEntry[] = [];
+    const sources = new Set<string>(["cloudwatch:DescribeLogGroups"]);
+
+    for (const logGroup of logGroups) {
+      const command = new FilterLogEventsCommand({
+        logGroupName: logGroup,
+        startTime: Date.parse(timeRange.startTime),
+        endTime: Date.parse(timeRange.endTime),
+        limit: perGroupLimit,
+      });
+      const response = await sendCloudWatchCommand(command, () => client.send(command));
+
+      sources.add("cloudwatch:FilterLogEvents");
+
+      for (const event of response.events ?? []) {
+        const message = event.message?.trim();
+        if (!message || event.timestamp === undefined) {
+          continue;
+        }
+
+        const entry: NormalizedCloudWatchLogEntry = {
+          timestamp: new Date(event.timestamp).toISOString(),
+          service: inferServiceName(logGroup, filters.serviceName),
+          logGroup,
+          severity: deriveSeverity(message),
+          messageSummary: summarizeMessage(message),
+          requestId:
+            extractPattern(message, /\brequest(?:id)?[:= ]+([a-z0-9-]{6,})\b/i) ??
+            extractPattern(message, /\brequestId[:= ]+([a-z0-9-]{6,})\b/i),
+          correlationId: extractPattern(
+            message,
+            /\bcorrelation(?:id)?[:= ]+([a-z0-9-]{6,})\b/i
+          ),
+        };
+
+        if (shouldKeepEntry(entry, filters)) {
+          collectedEntries.push(entry);
+        }
+      }
+    }
+
+    const entries = collectedEntries
+      .sort((left, right) => Date.parse(right.timestamp) - Date.parse(left.timestamp))
+      .slice(0, maxEntries);
+    const latestError = entries.find((entry) => entry.severity === "error");
+
     return {
       context: {
         checkedAt: new Date().toISOString(),
         timeRange,
         serviceName: filters.serviceName,
         queryText: filters.queryText,
-        logGroupCount: 0,
-        returnedCount: 0,
-        repeatedMessages: [],
-        noLogGroups: true,
-        entries: [],
+        logGroupCount: logGroups.length,
+        returnedCount: entries.length,
+        repeatedMessages: buildRepeatedMessages(entries),
+        latestError: latestError
+          ? {
+              timestamp: latestError.timestamp,
+              service: latestError.service,
+              logGroup: latestError.logGroup,
+              messageSummary: latestError.messageSummary,
+            }
+          : undefined,
+        noLogGroups: false,
+        entries,
       } satisfies NormalizedCloudWatchLogs,
-      sources: [
-        {
-          type: "aws" as const,
-          endpoint: "cloudwatch:DescribeLogGroups",
-        },
-      ],
+      sources: [...sources].map((endpoint) => ({
+        type: "aws" as const,
+        endpoint,
+      })),
     };
-  }
-
-  const maxEntries = filters.limit && filters.limit > 0 ? filters.limit : 25;
-  const perGroupLimit = Math.max(5, Math.ceil(maxEntries / logGroups.length));
-  const collectedEntries: NormalizedCloudWatchLogEntry[] = [];
-  const sources = new Set<string>(["cloudwatch:DescribeLogGroups"]);
-
-  for (const logGroup of logGroups) {
-    const response = await client.send(
-      new FilterLogEventsCommand({
-        logGroupName: logGroup,
-        startTime: Date.parse(timeRange.startTime),
-        endTime: Date.parse(timeRange.endTime),
-        limit: perGroupLimit,
-      })
-    );
-
-    sources.add("cloudwatch:FilterLogEvents");
-
-    for (const event of response.events ?? []) {
-      const message = event.message?.trim();
-      if (!message || event.timestamp === undefined) {
-        continue;
-      }
-
-      const entry: NormalizedCloudWatchLogEntry = {
-        timestamp: new Date(event.timestamp).toISOString(),
-        service: inferServiceName(logGroup, filters.serviceName),
-        logGroup,
-        severity: deriveSeverity(message),
-        messageSummary: summarizeMessage(message),
-        requestId:
-          extractPattern(message, /\brequest(?:id)?[:= ]+([a-z0-9-]{6,})\b/i) ??
-          extractPattern(message, /\brequestId[:= ]+([a-z0-9-]{6,})\b/i),
-        correlationId: extractPattern(
-          message,
-          /\bcorrelation(?:id)?[:= ]+([a-z0-9-]{6,})\b/i
-        ),
-      };
-
-      if (shouldKeepEntry(entry, filters)) {
-        collectedEntries.push(entry);
-      }
-    }
-  }
-
-  const entries = collectedEntries
-    .sort((left, right) => Date.parse(right.timestamp) - Date.parse(left.timestamp))
-    .slice(0, maxEntries);
-  const latestError = entries.find((entry) => entry.severity === "error");
-
-  return {
-    context: {
-      checkedAt: new Date().toISOString(),
-      timeRange,
-      serviceName: filters.serviceName,
-      queryText: filters.queryText,
-      logGroupCount: logGroups.length,
-      returnedCount: entries.length,
-      repeatedMessages: buildRepeatedMessages(entries),
-      latestError: latestError
-        ? {
-            timestamp: latestError.timestamp,
-            service: latestError.service,
-            logGroup: latestError.logGroup,
-            messageSummary: latestError.messageSummary,
-          }
-        : undefined,
-      noLogGroups: false,
-      entries,
-    } satisfies NormalizedCloudWatchLogs,
-    sources: [...sources].map((endpoint) => ({
-      type: "aws" as const,
-      endpoint,
-    })),
-  };
+  });
 }

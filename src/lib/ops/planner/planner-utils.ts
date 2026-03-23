@@ -236,11 +236,20 @@ export function selectBestCandidate(
   });
 
   const selectedCandidate = sorted[0];
+  const shouldTrimTools =
+    (selectedCandidate.plan.confidence ?? 0) < 0.9 && selectedCandidate.plan.tools.length > 4;
+  const trimmedTools = shouldTrimTools
+    ? selectedCandidate.plan.tools.slice(0, 4)
+    : selectedCandidate.plan.tools;
 
   return createExecutionPlan({
     ...selectedCandidate.plan,
+    tools: trimmedTools,
     notes: [
       ...(selectedCandidate.plan.notes ?? []),
+      ...(shouldTrimTools
+        ? ["Tool selection was capped to keep a weak-confidence plan compact and relevant."]
+        : []),
       `Deterministic candidate selection chose ${selectedCandidate.ruleName} from ${sorted.length} candidate plans.`,
       `Matched signals: ${(selectedCandidate.plan.matchedSignals ?? context.matchedSignals).join(", ") || "none"}.`,
       `Selected domains: ${(selectedCandidate.plan.selectedDomains ?? [selectedCandidate.plan.domain]).join(", ")}.`,

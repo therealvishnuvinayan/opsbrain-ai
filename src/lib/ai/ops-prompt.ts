@@ -25,6 +25,74 @@ function buildSummarySection(summary: string) {
   return summary ? `Summary:\n${summary}` : "";
 }
 
+function trimString(value: string, maxLength = 240) {
+  return value.length > maxLength ? `${value.slice(0, maxLength - 3)}...` : value;
+}
+
+function compactValue(value: unknown, depth = 0): unknown {
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    return trimString(value, 240);
+  }
+
+  if (typeof value !== "object") {
+    return value;
+  }
+
+  if (depth >= 3) {
+    return Array.isArray(value) ? `[${value.length} items]` : "[object]";
+  }
+
+  if (Array.isArray(value)) {
+    return value.slice(0, 4).map((item) => compactValue(item, depth + 1));
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, entryValue]) => entryValue !== undefined)
+    .slice(0, 12);
+
+  return Object.fromEntries(
+    entries.map(([key, entryValue]) => [key, compactValue(entryValue, depth + 1)])
+  );
+}
+
+function buildCompactAnalytics(analytics: OpsAnalytics) {
+  return {
+    domain: analytics.domain,
+    intent: analytics.intent,
+    summary: analytics.summary,
+    patterns: analytics.patterns.slice(0, 4),
+    nextChecks: analytics.nextChecks.slice(0, 5),
+    examples: analytics.examples.slice(0, 3),
+    notes: analytics.notes.slice(0, 4),
+    statusSummary: compactValue(analytics.statusSummary),
+    detailSummary: compactValue(analytics.detailSummary),
+    auditSummary: compactValue(analytics.auditSummary),
+    reconciliationSummary: compactValue(analytics.reconciliationSummary),
+    awsSummary: compactValue(analytics.awsSummary),
+    knowledgeSummary: compactValue(analytics.knowledgeSummary),
+  };
+}
+
+function buildCompactContext(context: PackedOpsContext<PackedOrderData>) {
+  return {
+    domain: context.domain,
+    intent: context.intent,
+    entities: compactValue(context.entities),
+    executionSummary: compactValue(context.executionSummary),
+    sources: context.sources.slice(0, 6).map((source) => ({
+      type: source.type,
+      label: source.label,
+      endpoint: source.endpoint,
+    })),
+    notes: context.notes.slice(0, 4),
+    data: compactValue(context.data),
+  };
+}
+
 export function buildOpsPrompt(
   question: string,
   context: PackedOpsContext<PackedOrderData>,
@@ -52,9 +120,9 @@ export function buildOpsPrompt(
     user: [
       `User question: ${question}`,
       "Structured analytics:",
-      JSON.stringify(analytics, null, 2),
+      JSON.stringify(buildCompactAnalytics(analytics), null, 2),
       "Packed operations context:",
-      JSON.stringify(context, null, 2),
+      JSON.stringify(buildCompactContext(context), null, 2),
       "Write the answer with these sections when useful:",
       "Summary:",
       "Details:",
